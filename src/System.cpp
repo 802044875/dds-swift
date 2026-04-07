@@ -22,6 +22,11 @@
 #include "Scheduler.h"
 #include "ThreadMgr.h"
 
+#include <TargetConditionals.h>
+#if TARGET_OS_IOS || TARGET_OS_SIMULATOR
+#include <os/proc.h>
+#endif
+
 extern Scheduler scheduler;
 extern Memory memory;
 extern ThreadMgr threadMgr;
@@ -213,12 +218,24 @@ void System::GetHardware(
   fclose(fifo);
 
   kilobytesFree /= 1024;
+
+  if (kilobytesFree == 0)
+  {
+#if TARGET_OS_IOS || TARGET_OS_SIMULATOR
+    kilobytesFree = os_proc_available_memory();
+#endif
+    if (kilobytesFree == 0)
+    {
+        kilobytesFree = 1460000;  // ~1.4 GB hardcoded fallback
+    }
+  }
+
   if (kilobytesFree > 500000)
   {
     kilobytesFree -= 500000;
   }
 
-  ncores = sysconf(_SC_NPROCESSORS_ONLN);
+  ncores = (int) sysconf(_SC_NPROCESSORS_ONLN);
   return;
 #endif
 

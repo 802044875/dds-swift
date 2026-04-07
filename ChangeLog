@@ -1,3 +1,42 @@
+Release Notes DDS 2.10.0 (dds-swift fork)
+------------------------------------------
+Restructured repository as a Swift Package Manager package with a pure
+Swift API layer (DDSSwift). Full coverage of all recommended DDS functions.
+
+src/System.cpp: Added iOS/macOS sandbox memory detection fallback chain.
+popen("sysctl") is blocked in sandboxed apps, causing DDS to detect 0 KB
+of memory. Added fallback: os_proc_available_memory() on iOS, then 1.4 GB
+hardcoded fallback. Added (int) cast to sysconf() call.
+
+include/module.modulemap: Added modulemap for SPM C module import.
+
+Sources/DDSSwift/: Swift wrapper covering all recommended DDS functions:
+  DDSSolver — SolveBoard, SolveBoardPBN, SolveAllBoards, CalcDDtable,
+    CalcDDtablePBN, CalcAllTablesPBN, Par, DealerPar, SidesPar,
+    DealerParBin, SidesParBin, ConvertToDealerTextFormat,
+    ConvertToSidesTextFormat, AnalysePlayBin, AnalysePlayPBN,
+    AnalyseAllPlaysBin, AnalyseAllPlaysPBN, GetDDSInfo.
+  DDSConfig — SetMaxThreads, FreeMemory, SetThreading, SetResources.
+  DDSTypes — DDSFutureTricks, DDSTableResults, DDSDeal, DDSParResults,
+    DDSParResultsDealer, DDSParResultsMaster, DDSContractType,
+    DDSParTextResults, DDSPlayTrace, DDSPlayTracePBN, DDSSolvedPlay,
+    DDSInfoResult.
+  DDSError — error enum mapping all DDS C error codes.
+  DDSFormatting — table and par result formatting.
+
+Tests/DDSSwiftTests/: 42 tests across 8 test files covering solving,
+  DD tables, par calculation, play analysis, configuration, and errors.
+
+Package.swift: Added SPM package manifest with DDSSwift product and
+internal DDS C target.
+
+README.md: Replaced upstream README with fork-specific documentation
+covering patches, Swift API, installation, and licence.
+
+Removed INSTALL (upstream build instructions, not relevant to SPM).
+Updated .gitignore for SPM build artifacts.
+
+
 Release Notes DDS 2.9.1
 -----------------------
 test/print.cpp: Fixed bug in equals_to_string() noticed by tucsu.

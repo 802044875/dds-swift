@@ -1,0 +1,4 @@
+module DDS {
+    header "dll.h"
+    export *
+}
