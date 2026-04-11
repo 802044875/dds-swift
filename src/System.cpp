@@ -23,6 +23,9 @@
 #include "ThreadMgr.h"
 
 #include <TargetConditionals.h>
+#ifdef __APPLE__
+#include <sys/sysctl.h>
+#endif
 #if TARGET_OS_IOS || TARGET_OS_SIMULATOR
 #include <os/proc.h>
 #endif
@@ -207,17 +210,16 @@ void System::GetHardware(
 #ifdef __APPLE__
   // The code for Mac OS X was suggested by Matthew Kidd.
 
-  // This is physical memory, rather than "free" memory as below 
-  // for Linux.  Always leave 0.5 GB for the OS and other stuff. 
-  // It would be better to find free memory (how?) but in practice 
-  // the number of cores rather than free memory is almost certainly 
-  // the limit for Macs which have  standardized hardware (whereas 
+  // This is physical memory, rather than "free" memory as below
+  // for Linux.  Always leave 0.5 GB for the OS and other stuff.
+  // It would be better to find free memory (how?) but in practice
+  // the number of cores rather than free memory is almost certainly
+  // the limit for Macs which have  standardized hardware (whereas
   // say a 32 core Linux server is hardly unusual).
-  FILE * fifo = popen("sysctl -n hw.memsize", "r");
-  fscanf(fifo, "%lld", &kilobytesFree);
-  fclose(fifo);
-
-  kilobytesFree /= 1024;
+  int64_t memsize = 0;
+  size_t len = sizeof(memsize);
+  if (sysctlbyname("hw.memsize", &memsize, &len, NULL, 0) == 0)
+    kilobytesFree = static_cast<unsigned long long>(memsize / 1024);
 
   if (kilobytesFree == 0)
   {

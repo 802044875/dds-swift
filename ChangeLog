@@ -1,3 +1,24 @@
+Release Notes DDS 2.10.1 (dds-swift fork)
+------------------------------------------
+Fixed concurrent access crash and iOS simulator sysctl warning.
+
+Sources/DDSSwift/DDSSolver.swift: Added serial DispatchQueue to serialize
+all public DDSSolver method calls. DDS uses global mutable state internally
+(memory, scheduler, cparam, threadMgr) and is not safe for concurrent
+external calls. The serial queue prevents heap corruption when multiple
+threads call DDSSolver simultaneously. DDS internal parallelism via
+dispatch_apply is unaffected.
+
+src/System.cpp: Replaced popen("sysctl -n hw.memsize") with sysctlbyname()
+C API call. The popen approach spawns a shell which fails in the iOS
+simulator sandbox ("sh: sysctl: command not found"). sysctlbyname() works
+in all Apple environments. Existing fallback chain retained.
+
+Tests/DDSSwiftTests/ThreadSafetyTests.swift: Added 4 tests covering rapid
+sequential calls (calcTables, calcDDTablePBN, solveBoard) and concurrent
+calls from multiple threads.
+
+
 Release Notes DDS 2.10.0 (dds-swift fork)
 ------------------------------------------
 Restructured repository as a Swift Package Manager package with a pure

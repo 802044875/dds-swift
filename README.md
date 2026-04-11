@@ -24,19 +24,15 @@ Then add the product dependency to your target:
 
 ## Patches vs Upstream
 
-This fork applies one patch to the upstream DDS source. The upstream repository has not been updated since July 2020 and does not contain this fix.
+This fork applies patches to the upstream DDS source. The upstream repository has not been updated since July 2020 and does not contain these fixes.
 
-### `src/System.cpp` — iOS Sandbox Memory Detection
+### `src/System.cpp` — Memory Detection Fix
 
-The `GetHardware()` function's `__APPLE__` section uses `popen("sysctl -n hw.memsize")` to detect physical memory. On iOS and macOS sandboxed apps, `popen` is blocked by the sandbox, causing DDS to detect 0 KB of memory and allocate 0 threads — making DDS non-functional.
+Replaced `popen("sysctl -n hw.memsize")` with `sysctlbyname()` C API call. The `popen` approach spawns a shell which fails in the iOS simulator sandbox (`sh: sysctl: command not found`), causing DDS to detect 0 KB of memory. The `sysctlbyname()` call works in all Apple environments. Fallback chain retained: `os_proc_available_memory()` on iOS, then 1.4 GB hardcoded fallback.
 
-**Changes:**
-1. Added `#include <TargetConditionals.h>` and platform-guarded `#include <os/proc.h>` (iOS/Simulator only)
-2. Added fallback chain after `kilobytesFree /= 1024;`:
-   - Try `popen("sysctl -n hw.memsize")` (works on non-sandboxed macOS)
-   - If that returns 0 and running on iOS, try `os_proc_available_memory()` (Apple API, works in sandbox)
-   - If that also returns 0, use 1.4 GB hardcoded fallback (conservative safe value)
-3. Added `(int)` cast to `sysconf(_SC_NPROCESSORS_ONLN)` to suppress warning
+### `Sources/DDSSwift/DDSSolver.swift` — Thread Safety
+
+All public `DDSSolver` methods are serialized via a `DispatchQueue` to prevent concurrent access to DDS global mutable state (`memory`, `scheduler`, `cparam`, `threadMgr`). DDS handles internal parallelism via `dispatch_apply`, so serializing external calls does not reduce throughput.
 
 ## Swift API
 
@@ -117,7 +113,7 @@ Run tests from the package directory:
 swift test
 ```
 
-The test suite includes 42 tests across 8 test files:
+The test suite includes 46 tests across 9 test files:
 - **DDSSolverTests** — batch DD table calculation with 18 boards and known optimum scores
 - **SolveBoardTests** — PBN and binary single-board solving with cross-validation
 - **SolveAllBoardsTests** — batch solving, verified against individual results
@@ -126,6 +122,7 @@ The test suite includes 42 tests across 8 test files:
 - **PlayAnalysisTests** — single and batch play analysis (PBN and binary)
 - **ConfigTests** — threading, resource configuration, memory management
 - **ErrorTests** — invalid inputs produce correct DDSError cases
+- **ThreadSafetyTests** — rapid sequential and concurrent calls across multiple threads
 
 ## Licence
 
