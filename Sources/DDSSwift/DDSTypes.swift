@@ -68,6 +68,16 @@ public struct DDSTableResults: Sendable {
         }
         self.resTable = result
     }
+
+    /// Public initialiser from a caller-supplied makeable table — enables computing par
+    /// (`DDSSolver.par` / `dealerPar` / `sidesPar`) from an **externally-derived** DD table
+    /// (e.g. a persisted `[DoubleDummyTricks]` / `OptimumResultTable` tag) with **no re-solve**.
+    /// `resTable[strain][hand]`, strains 0=S,1=H,2=D,3=C,4=NT, hands 0=N,1=E,2=S,3=W — must be 5×4.
+    public init(resTable: [[Int32]]) {
+        precondition(resTable.count == 5 && resTable.allSatisfy { $0.count == 4 },
+                     "DDSTableResults.resTable must be 5 strains × 4 hands")
+        self.resTable = resTable
+    }
 }
 
 // MARK: - ParResultsDealer
