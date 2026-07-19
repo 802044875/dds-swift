@@ -7,6 +7,6 @@ Package.resolved
 .DS_Store
 dump.txt
 
-# SwiftPM build output — kept LOCAL via iCloud .nosync convention; never commit
-.build
-.build.nosync/
+# SwiftPM build output — kept LOCAL via iCloud .nosync convention; never commit.
+# `.build*` also catches iCloud "filename 2" conflict copies (.build 2, .build.nosync 2).
+.build*
