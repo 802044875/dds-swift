@@ -1,4 +1,4 @@
-.build/
+.build
 .swiftpm/
 DerivedData/
 *.xcodeproj/
@@ -8,5 +8,5 @@ Package.resolved
 dump.txt
 
 # SwiftPM build output — kept LOCAL via iCloud .nosync convention; never commit
-.build/
+.build
 .build.nosync/
