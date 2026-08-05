@@ -31,6 +31,7 @@ final class SolveAllBoardsTests: XCTestCase {
         // Solve as batch
         let boards = (0..<3).map { i in
             (pbn: pbnHands[i], trump: trumps[i], first: firsts[i],
+             currentTrickSuit: [Int32](repeating: 0, count: 3), currentTrickRank: [Int32](repeating: 0, count: 3),
              target: Int32(-1), solutions: Int32(3), mode: Int32(0))
         }
 
@@ -60,6 +61,7 @@ final class SolveAllBoardsTests: XCTestCase {
 
         let boards = (0..<3).map { i in
             (pbn: pbnHands[i], trump: trumps[i], first: firsts[i],
+             currentTrickSuit: [Int32](repeating: 0, count: 3), currentTrickRank: [Int32](repeating: 0, count: 3),
              target: Int32(-1), solutions: Int32(2), mode: Int32(0))
         }
 
@@ -69,6 +71,38 @@ final class SolveAllBoardsTests: XCTestCase {
         for i in 0..<3 {
             XCTAssertEqual(results[i].cards, expectedCards[i],
                            "Hand \(i): expected \(expectedCards[i]) optimal cards, got \(results[i].cards)")
+        }
+    }
+
+    /// The batch path must honour per-board current-trick context (added for the SDS mid-trick use).
+    /// North (leader) has already played ♠Q; the rest of the trick is solved from East. The batch
+    /// result must equal the single-board `solveBoard` result for the SAME mid-trick position —
+    /// which it could not before, when `solveAllBoards` hardcoded the trick context to zero.
+    func testSolveAllBoards_honoursCurrentTrick() throws {
+        // pbnHands[0] with ♠Q removed from North (it has been led); 12 + 13 + 13 + 13 = 51 in hand + 1 played.
+        let midTrickPBN = "N:J6.K652.J85.T98 873.J97.AT764.Q4 K5.T83.KQ9.A7652 AT942.AQ4.32.KJ3"
+        let trump: Int32 = 0            // spades
+        let first: Int32 = 0            // North led
+        let ts: [Int32] = [0, 0, 0]     // led suit = spades (0)
+        let tr: [Int32] = [12, 0, 0]    // led rank = Queen (12)
+
+        let single = try DDSSolver.solveBoard(
+            pbn: midTrickPBN, target: -1, solutions: 3, mode: 0,
+            trump: trump, first: first, currentTrickSuit: ts, currentTrickRank: tr)
+
+        let batch = try DDSSolver.solveAllBoards(boards: [
+            (pbn: midTrickPBN, trump: trump, first: first,
+             currentTrickSuit: ts, currentTrickRank: tr,
+             target: Int32(-1), solutions: Int32(3), mode: Int32(0))
+        ])
+
+        XCTAssertEqual(batch.count, 1)
+        XCTAssertEqual(batch[0].cards, single.cards, "mid-trick batch vs single: card-count mismatch")
+        for j in 0..<Int(single.cards) {
+            XCTAssertEqual(batch[0].suit[j], single.suit[j], "mid-trick card \(j): suit mismatch")
+            XCTAssertEqual(batch[0].rank[j], single.rank[j], "mid-trick card \(j): rank mismatch")
+            XCTAssertEqual(batch[0].score[j], single.score[j], "mid-trick card \(j): score mismatch")
+            XCTAssertEqual(batch[0].equals[j], single.equals[j], "mid-trick card \(j): equals mismatch")
         }
     }
 }

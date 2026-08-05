@@ -202,11 +202,15 @@ public enum DDSSolver {
 
     /// Solves multiple board positions in parallel using `SolveAllBoards` (PBN).
     ///
-    /// - Parameter boards: Array of tuples containing (pbn, trump, first, target, solutions, mode).
+    /// - Parameter boards: Array of tuples containing (pbn, trump, first, currentTrickSuit,
+    ///   currentTrickRank, target, solutions, mode). `currentTrickSuit`/`currentTrickRank` encode the
+    ///   0–3 cards already played to the current trick (DDS suit/rank encoding), in play order; pass
+    ///   `[0,0,0]` (or `[]`) for a start-of-trick / opening-lead position. Shorter arrays are padded
+    ///   with 0. This makes the batch path usable mid-trick, matching single-board `solveBoard`.
     /// - Returns: Array of `DDSFutureTricks` results, one per board.
     /// - Throws: `DDSError` if DDS returns an error code.
     public static func solveAllBoards(
-        boards: [(pbn: String, trump: Int32, first: Int32, target: Int32, solutions: Int32, mode: Int32)]
+        boards: [(pbn: String, trump: Int32, first: Int32, currentTrickSuit: [Int32], currentTrickRank: [Int32], target: Int32, solutions: Int32, mode: Int32)]
     ) throws -> [DDSFutureTricks] {
         try ddsQueue.sync {
             SetMaxThreads(0)
@@ -219,8 +223,9 @@ public enum DDSSolver {
                 for (i, board) in boards.enumerated() {
                     base[i].trump = board.trump
                     base[i].first = board.first
-                    base[i].currentTrickSuit = (0, 0, 0)
-                    base[i].currentTrickRank = (0, 0, 0)
+                    let ts = board.currentTrickSuit, tr = board.currentTrickRank
+                    base[i].currentTrickSuit = (ts.count > 0 ? ts[0] : 0, ts.count > 1 ? ts[1] : 0, ts.count > 2 ? ts[2] : 0)
+                    base[i].currentTrickRank = (tr.count > 0 ? tr[0] : 0, tr.count > 1 ? tr[1] : 0, tr.count > 2 ? tr[2] : 0)
                     board.pbn.withCString { cstr in
                         withUnsafeMutablePointer(to: &base[i].remainCards) { ptr in
                             let dest = UnsafeMutableRawPointer(ptr).assumingMemoryBound(to: CChar.self)
