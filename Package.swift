@@ -12,29 +12,31 @@ let package = Package(
             name: "DDS",
             path: ".",
             exclude: [
-                "src/COMMENT", "src/Exports.def", "src/Makefile_Win_clang_static",
-                "src/Makefiles", "src/dds.rc",
+                "src",
+                "include",
                 "doc", "examples", "hands", "test",
                 "Sources", "Tests",
-                "ChangeLog", "LICENSE", "README.md"
+                "ChangeLog", "LICENSE", "README.md",
+                "library/VENDOR-REF.txt"
             ],
-            sources: ["src"],
-            publicHeadersPath: "include",
+            sources: ["library/src"],
+            publicHeadersPath: "library/src",
             cxxSettings: [
-                .headerSearchPath("include"),
-                .headerSearchPath("src"),
-                .define("DDS_THREADS_GCD", .when(platforms: [.iOS, .macOS]))
+                .headerSearchPath("library/src")
             ]
         ),
         .target(
             name: "DDSSwift",
             dependencies: ["DDS"],
-            path: "Sources/DDSSwift"
+            path: "Sources/DDSSwift",
+            swiftSettings: [.interoperabilityMode(.Cxx)]
         ),
         .testTarget(
             name: "DDSSwiftTests",
             dependencies: ["DDSSwift"],
-            path: "Tests/DDSSwiftTests"
+            path: "Tests/DDSSwiftTests",
+            swiftSettings: [.interoperabilityMode(.Cxx)]
         )
-    ]
+    ],
+    cxxLanguageStandard: .cxx20
 )

@@ -105,10 +105,10 @@ final class DDSSolverTests: XCTestCase {
 
     func testGetInfo() {
         let info = DDSSolver.getInfo()
-        XCTAssertEqual(info.major, 2)
-        XCTAssertEqual(info.minor, 9)
+        XCTAssertEqual(info.major, 3)
+        XCTAssertEqual(info.minor, 1)
         XCTAssertEqual(info.patch, 0)
         XCTAssertTrue(info.systemString.contains("Apple"))
-        XCTAssertTrue(info.systemString.contains("2.9.0"))
+        XCTAssertTrue(info.versionString.contains("3.1.0"))
     }
 }

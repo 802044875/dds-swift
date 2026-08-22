@@ -4,42 +4,40 @@ import XCTest
 
 final class ConfigTests: XCTestCase {
 
+    func testInitialize_noCrash() {
+        // DDSConfig.initialize() wraps InitializeStaticMemory() — should never crash.
+        DDSConfig.initialize()
+        let info = DDSSolver.getInfo()
+        XCTAssertGreaterThan(info.major, 0)
+    }
+
     func testSetMaxThreads_zeroCausesNoCrash() {
+        // In DDS 3.x, SetMaxThreads is a deprecated alias for InitializeStaticMemory().
         DDSConfig.setMaxThreads(0)
         let info = DDSSolver.getInfo()
-        XCTAssertGreaterThan(info.noOfThreads, 0, "Should auto-configure at least 1 thread")
+        XCTAssertGreaterThan(info.numCores, 0, "Should detect at least 1 hardware core")
     }
 
     func testSetMaxThreads_specificValue() {
-        // SetMaxThreads only takes effect when DDS reinitializes internally.
-        // Verify it does not crash and info remains valid.
+        // In DDS 3.x the thread-count argument is ignored; verify no crash.
         DDSConfig.setMaxThreads(1)
         let info = DDSSolver.getInfo()
-        XCTAssertGreaterThan(info.noOfThreads, 0, "Should still have threads configured")
-
-        // Reset to auto
+        XCTAssertGreaterThan(info.numCores, 0, "Should still have cores detected")
         DDSConfig.setMaxThreads(0)
-    }
-
-    func testSetThreading_GCD() throws {
-        // On macOS, GCD (code 3) should be available
-        try DDSConfig.setThreading(3)
-        let info = DDSSolver.getInfo()
-        XCTAssertEqual(info.threading, 3, "Threading should be GCD (3)")
     }
 
     func testSetResources_noCrash() {
         DDSConfig.setResources(maxMemoryMB: 160, maxThreads: 2)
         let info = DDSSolver.getInfo()
-        // Just verify we can still get info after setting resources
         XCTAssertGreaterThan(info.major, 0)
     }
 
-    func testFreeMemory_noCrash() {
-        DDSConfig.freeMemory()
-        // Should not crash; verify we can still operate
+    func testGetInfo_versionIs3() {
         let info = DDSSolver.getInfo()
-        XCTAssertGreaterThan(info.major, 0)
+        XCTAssertEqual(info.major, 3, "DDS 3.1.0 should report major version 3")
+        XCTAssertEqual(info.minor, 1)
+        XCTAssertEqual(info.patch, 0)
+        XCTAssertEqual(info.versionString, "3.1.0")
     }
 
     func testGetInfo_afterConfigChanges() {
@@ -54,10 +52,8 @@ final class ConfigTests: XCTestCase {
         XCTAssertEqual(info1.minor, info2.minor)
         XCTAssertEqual(info1.patch, info2.patch)
 
-        // Thread count should still be positive
-        XCTAssertGreaterThan(info2.noOfThreads, 0)
+        XCTAssertGreaterThan(info2.numCores, 0)
 
-        // Reset
         DDSConfig.setMaxThreads(0)
     }
 }

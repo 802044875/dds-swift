@@ -1,0 +1,8 @@
+// DDS 3.1.0 — C++20 double dummy solver.
+// publicHeadersPath is library/src, so <utility/constants.h> resolves correctly
+// when DDSSwift imports this module via Swift/C++ interop.
+module DDS {
+    header "api/dll.h"
+    requires cplusplus
+    export *
+}
