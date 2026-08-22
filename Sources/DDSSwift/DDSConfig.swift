@@ -3,32 +3,27 @@ internal import DDS
 /// Configuration and lifecycle management for the DDS library.
 public enum DDSConfig {
 
+    /// Initialises DDS static memory (transposition tables, thread pools, lookup tables).
+    ///
+    /// DDS 3.1.0 initialises itself lazily on first use. Call this explicitly at app
+    /// start if you want to absorb the one-time setup cost before the first solve.
+    public static func initialize() {
+        InitializeStaticMemory()
+    }
+
     /// Sets the maximum number of threads DDS will use.
     ///
-    /// - Parameter threads: Number of threads (0 = auto-detect based on cores).
+    /// Deprecated in DDS 3.x — acts as an alias for `initialize()`. The thread
+    /// count is now controlled per-call via the N-variants (e.g. `SolveAllBoardsN`).
+    ///
+    /// - Parameter threads: Ignored in DDS 3.x.
     public static func setMaxThreads(_ threads: Int32) {
         SetMaxThreads(threads)
     }
 
-    /// Explicitly frees all DDS-allocated memory.
+    /// Sets memory and thread limits for DDS.
     ///
-    /// Called automatically after batch operations in `DDSSolver`, but can be
-    /// called manually if needed (e.g., under memory pressure).
-    public static func freeMemory() {
-        FreeMemory()
-    }
-
-    /// Sets the threading system used by DDS.
-    ///
-    /// - Parameter code: Threading backend code (0=none, 1=Windows, 2=OpenMP,
-    ///   3=GCD, 4=Boost, 5=STL, 6=TBB).
-    /// - Throws: `DDSError` if the requested threading system is not available.
-    public static func setThreading(_ code: Int32) throws {
-        let res = SetThreading(code)
-        try checkDDS(res)
-    }
-
-    /// Configures memory and thread limits for DDS.
+    /// Deprecated in DDS 3.x — use the N-variants for per-call thread caps.
     ///
     /// - Parameters:
     ///   - maxMemoryMB: Maximum memory in MB that DDS may use.

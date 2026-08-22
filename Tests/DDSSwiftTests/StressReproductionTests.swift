@@ -4,29 +4,29 @@ import DDS
 
 @testable import DDSSwift
 
-/// Reproduction tests for bug report:
-/// "ddsQueue.sync fix is insufficient — dispatch_apply worker race persists"
+/// Stress and thread-safety tests for the DDS C API and DDSSolver wrapper.
 ///
-/// The report claims dispatch_apply workers linger after C functions return,
-/// so SetMaxThreads(0) in the next call frees memory they're still using.
+/// DDS 3.1.0 is thread-safe by construction (SolverContext-based parallelism).
+/// The "Direct C API" suite confirms the legacy C entry points still work correctly
+/// under concurrent load now that the external ddsQueue serialisation has been removed.
 ///
-/// The top-level suite is .serialized so that direct C API tests (which bypass
-/// ddsQueue.sync) never overlap with wrapper tests — they all share DDS global state.
+/// The top-level suite is .serialized to avoid state collisions between the direct
+/// C API suite and the wrapper suite.
 
 // MARK: - Helper
 
 /// Calls CalcAllTablesPBN directly via the C API for a single deal.
 private func callCalcAllTablesPBNDirect(_ pbn: String) -> Int32 {
-    var dealsPBN = ddTableDealsPBN()
-    var tableRes = ddTablesRes()
-    var pres = allParResults()
+    var dealsPBN = DdTableDealsPBN()
+    var tableRes = DdTablesRes()
+    var pres = AllParResults()
     var trumpFilter: (Int32, Int32, Int32, Int32, Int32) = (0, 0, 0, 0, 0)
 
-    dealsPBN.noOfTables = 1
+    dealsPBN.no_of_tables = 1
     pbn.withCString { cstr in
         withUnsafeMutablePointer(to: &dealsPBN.deals) { ptr in
             let base = UnsafeMutableRawPointer(ptr)
-                .assumingMemoryBound(to: ddTableDealPBN.self)
+                .assumingMemoryBound(to: DdTableDealPBN.self)
             withUnsafeMutablePointer(to: &base.pointee.cards) { cardsPtr in
                 let dest = UnsafeMutableRawPointer(cardsPtr)
                     .assumingMemoryBound(to: CChar.self)
@@ -68,14 +68,14 @@ private let stressDeals = [
 @Suite("DDS Stress Reproduction", .serialized)
 struct StressReproductionTests {
 
-    // MARK: - Direct C API tests (bypass ddsQueue.sync)
+    // MARK: - Direct C API tests (3.1.0 — thread-safe by construction)
     // No .serialized here — the two direct C tests run concurrently with each other.
 
     @Suite("Direct C API")
     struct DirectCAPITests {
 
-        /// Reporter's core claim: rapid sequential SetMaxThreads(0) + CalcAllTablesPBN.
-        /// If dispatch_apply workers linger, Resize(0) should crash.
+        /// Rapid sequential SetMaxThreads(0) + CalcAllTablesPBN.
+        /// In 3.1.0, SetMaxThreads is a no-op alias for InitializeStaticMemory().
         @Test("Rapid sequential — SetMaxThreads(0) + CalcAllTablesPBN")
         func rapidSequentialDirectC() {
             for deal in stressDeals.prefix(10) {
@@ -85,7 +85,8 @@ struct StressReproductionTests {
             }
         }
 
-        /// Maximum teardown pressure: FreeMemory() between every call.
+        /// FreeMemory() between every call — deprecated in 3.1.0 (RAII via SolverContext),
+        /// but still callable; verifies the legacy path doesn't crash.
         @Test("Rapid sequential with FreeMemory between each call")
         func rapidSequentialDirectCWithFree() {
             for deal in stressDeals.prefix(10) {
@@ -97,7 +98,7 @@ struct StressReproductionTests {
         }
     }
 
-    // MARK: - DDSSolver wrapper tests (through ddsQueue.sync)
+    // MARK: - DDSSolver wrapper tests
 
     @Suite("DDSSolver Wrapper")
     struct WrapperTests {

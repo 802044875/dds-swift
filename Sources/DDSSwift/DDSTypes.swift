@@ -15,8 +15,8 @@ public struct DDSFutureTricks: Sendable {
     public let equals: [Int32]
     public let score: [Int32]
 
-    /// Initialises from the C `futureTricks` struct returned by DDS.
-    init(_ ft: futureTricks) {
+    /// Initialises from the C `FutureTricks` struct returned by DDS.
+    init(_ ft: FutureTricks) {
         self.nodes = Int32(ft.nodes)
         self.cards = Int32(ft.cards)
         self.suit = Self.tupleToArray13(ft.suit)
@@ -57,10 +57,10 @@ public struct DDSTableResults: Sendable {
     /// Hands: 0=North, 1=East, 2=South, 3=West.
     public let resTable: [[Int32]]
 
-    /// Initialises from the C `ddTableResults` struct.
-    init(_ table: ddTableResults) {
+    /// Initialises from the C `DdTableResults` struct.
+    init(_ table: DdTableResults) {
         var result: [[Int32]] = []
-        let t = table.resTable
+        let t = table.res_table
         // resTable is (Int32, Int32, Int32, Int32) for each of 5 strains
         let strains = [t.0, t.1, t.2, t.3, t.4]
         for strain in strains {
@@ -88,8 +88,8 @@ public struct DDSParResultsDealer: Sendable {
     public let score: Int32
     public let contracts: [String]
 
-    /// Initialises from the C `parResultsDealer` struct.
-    init(_ par: parResultsDealer) {
+    /// Initialises from the C `ParResultsDealer` struct.
+    init(_ par: ParResultsDealer) {
         self.number = par.number
         self.score = par.score
         var contracts: [String] = []
@@ -140,9 +140,9 @@ public struct DDSDeal: Sendable {
         self.remainCards = remainCards
     }
 
-    /// Converts to the C `deal` struct for passing to DDS functions.
-    func toCDeal() -> deal {
-        var dl = deal()
+    /// Converts to the C `Deal` struct for passing to DDS functions.
+    func toCDeal() -> Deal {
+        var dl = Deal()
         dl.trump = trump
         dl.first = first
         dl.currentTrickSuit.0 = currentTrickSuit[0]
@@ -174,13 +174,13 @@ public struct DDSParResults: Sendable {
     /// Par contract strings, index 0 = NS view, index 1 = EW view. E.g. "NS:EW 2S".
     public let parContractsString: [String]
 
-    /// Initialises from the C `parResults` struct.
-    init(_ par: parResults) {
+    /// Initialises from the C `ParResults` struct.
+    init(_ par: ParResults) {
         var scores: [String] = []
         var contracts: [String] = []
 
-        let s = par.parScore
-        let c = par.parContractsString
+        let s = par.par_score
+        let c = par.par_contracts_string
 
         // parScore is (CChar x 16, CChar x 16)
         let scoreTuples = [s.0, s.1]
@@ -222,9 +222,9 @@ public struct DDSContractType: Sendable {
     /// Seats: 0=N, 1=E, 2=S, 3=W, 4=NS, 5=EW.
     public let seats: Int32
 
-    init(_ ct: contractType) {
-        self.underTricks = ct.underTricks
-        self.overTricks = ct.overTricks
+    init(_ ct: ContractType) {
+        self.underTricks = ct.under_tricks
+        self.overTricks = ct.over_tricks
         self.level = ct.level
         self.denom = ct.denom
         self.seats = ct.seats
@@ -240,8 +240,8 @@ public struct DDSParResultsMaster: Sendable {
     /// Par contracts.
     public let contracts: [DDSContractType]
 
-    /// Initialises from the C `parResultsMaster` struct.
-    init(_ prm: parResultsMaster) {
+    /// Initialises from the C `ParResultsMaster` struct.
+    init(_ prm: ParResultsMaster) {
         self.score = prm.score
         self.number = prm.number
         let c = prm.contracts
@@ -263,9 +263,9 @@ public struct DDSParTextResults: Sendable {
     /// True if it does not matter who starts the bidding.
     public let equal: Bool
 
-    /// Initialises from the C `parTextResults` struct.
-    init(_ ptr: parTextResults) {
-        let t = ptr.parText
+    /// Initialises from the C `ParTextResults` struct.
+    init(_ ptr: ParTextResults) {
+        let t = ptr.par_text
         let tuples = [t.0, t.1]
         var texts: [String] = []
         for tuple in tuples {
@@ -297,9 +297,9 @@ public struct DDSPlayTrace: Sendable {
         self.rank = rank
     }
 
-    /// Converts to the C `playTraceBin` struct.
-    func toCPlayTrace() -> playTraceBin {
-        var pt = playTraceBin()
+    /// Converts to the C `PlayTraceBin` struct.
+    func toCPlayTrace() -> PlayTraceBin {
+        var pt = PlayTraceBin()
         pt.number = number
         withUnsafeMutablePointer(to: &pt.suit) { ptr in
             ptr.withMemoryRebound(to: Int32.self, capacity: 52) { base in
@@ -333,9 +333,9 @@ public struct DDSPlayTracePBN: Sendable {
         self.cards = cards
     }
 
-    /// Converts to the C `playTracePBN` struct.
-    func toCPlayTracePBN() -> playTracePBN {
-        var pt = playTracePBN()
+    /// Converts to the C `PlayTracePBN` struct.
+    func toCPlayTracePBN() -> PlayTracePBN {
+        var pt = PlayTracePBN()
         pt.number = number
         cards.withCString { cstr in
             withUnsafeMutablePointer(to: &pt.cards) { ptr in
@@ -356,8 +356,8 @@ public struct DDSSolvedPlay: Sendable {
     /// DD trick count after each card. Index 0 is before the opening lead.
     public let tricks: [Int32]
 
-    /// Initialises from the C `solvedPlay` struct.
-    init(_ sp: solvedPlay) {
+    /// Initialises from the C `SolvedPlay` struct.
+    init(_ sp: SolvedPlay) {
         self.number = sp.number
         self.tricks = Self.tupleToArray53(sp.tricks)
     }
@@ -404,7 +404,7 @@ public struct DDSInfoResult: Sendable {
         self.threading = info.threading
         self.noOfThreads = info.noOfThreads
 
-        var v = info.versionString
+        var v = info.version_string
         self.versionString = withUnsafePointer(to: &v) {
             $0.withMemoryRebound(to: CChar.self, capacity: 10) { String(cString: $0) }
         }

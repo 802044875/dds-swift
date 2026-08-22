@@ -5,23 +5,16 @@ internal import DDS
 ///
 /// Replaces the ObjC++ `DoubleDummyWrapper` / `DoubleDummy` bridge layer.
 /// All methods call DDS C functions directly via the `DDS` SPM module.
+/// DDS 3.1.0 is thread-safe by construction — no external serialisation queue is needed.
 public enum DDSSolver {
-
-    /// Serial queue to protect DDS global mutable state from concurrent access.
-    /// DDS handles internal parallelism via GCD's dispatch_apply, so serializing
-    /// external calls does not reduce throughput.
-    private static let ddsQueue = DispatchQueue(label: "com.dds.solver")
 
     // MARK: - System Info
 
     /// Returns DDS system information (version, threading, memory, cores).
     public static func getInfo() -> DDSInfoResult {
-        ddsQueue.sync {
-            SetMaxThreads(0)
-            var info = DDSInfo()
-            GetDDSInfo(&info)
-            return DDSInfoResult(info)
-        }
+        var info = DDSInfo()
+        GetDDSInfo(&info)
+        return DDSInfoResult(info)
     }
 
     // MARK: - Batch Table Calculation
@@ -49,65 +42,57 @@ public enum DDSSolver {
         vulns: [Int32],
         dealers: [Int32]
     ) throws -> [BoardResult] {
-        try ddsQueue.sync {
-            SetMaxThreads(0)
+        var dealsPBN = DdTableDealsPBN()
+        var tableRes = DdTablesRes()
+        var pres = AllParResults()
 
-            var dealsPBN = ddTableDealsPBN()
-            var tableRes = ddTablesRes()
-            var pres = allParResults()
+        let mode: Int32 = -1
+        var trumpFilter: (Int32, Int32, Int32, Int32, Int32) = (0, 0, 0, 0, 0)
 
-            let mode: Int32 = -1  // no par calculation via CalcAllTablesPBN
-            var trumpFilter: (Int32, Int32, Int32, Int32, Int32) = (0, 0, 0, 0, 0)  // all strains
+        dealsPBN.no_of_tables = Int32(hands.count)
 
-            dealsPBN.noOfTables = Int32(hands.count)
-
-            for (i, hand) in hands.enumerated() {
-                hand.withCString { cstr in
-                    withUnsafeMutablePointer(to: &dealsPBN.deals) { ptr in
-                        let base = UnsafeMutableRawPointer(ptr)
-                            .assumingMemoryBound(to: ddTableDealPBN.self)
-                        let deal = base.advanced(by: i)
-                        withUnsafeMutablePointer(to: &deal.pointee.cards) { cardsPtr in
-                            let dest = UnsafeMutableRawPointer(cardsPtr).assumingMemoryBound(to: CChar.self)
-                            strcpy(dest, cstr)
-                        }
+        for (i, hand) in hands.enumerated() {
+            hand.withCString { cstr in
+                withUnsafeMutablePointer(to: &dealsPBN.deals) { ptr in
+                    let base = UnsafeMutableRawPointer(ptr)
+                        .assumingMemoryBound(to: DdTableDealPBN.self)
+                    let deal = base.advanced(by: i)
+                    withUnsafeMutablePointer(to: &deal.pointee.cards) { cardsPtr in
+                        let dest = UnsafeMutableRawPointer(cardsPtr).assumingMemoryBound(to: CChar.self)
+                        strcpy(dest, cstr)
                     }
                 }
             }
-
-            let res = withUnsafeMutablePointer(to: &trumpFilter) { filterPtr in
-                filterPtr.withMemoryRebound(to: Int32.self, capacity: 5) { filter in
-                    CalcAllTablesPBN(&dealsPBN, mode, filter, &tableRes, &pres)
-                }
-            }
-
-            try checkDDS(res)
-
-            var results: [BoardResult] = []
-
-            for i in 0..<hands.count {
-                // Get the table result for this hand
-                let tableResult: ddTableResults = withUnsafePointer(to: tableRes.results) { ptr in
-                    let base = UnsafeRawPointer(ptr).assumingMemoryBound(to: ddTableResults.self)
-                    return base[i]
-                }
-
-                // Calculate dealer par
-                var parResDealer = parResultsDealer()
-                var mutableTable = tableResult
-                let parRes = DealerPar(&mutableTable, &parResDealer, dealers[i], vulns[i])
-                try checkDDS(parRes)
-
-                let par = DDSFormatting.formatDealerPar(DDSParResultsDealer(parResDealer))
-                let table = DDSFormatting.formatTable(DDSTableResults(tableResult))
-
-                results.append(BoardResult(optimumScore: par, optimumResultTable: table))
-            }
-
-            FreeMemory()
-
-            return results
         }
+
+        let res = withUnsafeMutablePointer(to: &trumpFilter) { filterPtr in
+            filterPtr.withMemoryRebound(to: Int32.self, capacity: 5) { filter in
+                CalcAllTablesPBN(&dealsPBN, mode, filter, &tableRes, &pres)
+            }
+        }
+
+        try checkDDS(res)
+
+        var results: [BoardResult] = []
+
+        for i in 0..<hands.count {
+            let tableResult: DdTableResults = withUnsafePointer(to: tableRes.results) { ptr in
+                let base = UnsafeRawPointer(ptr).assumingMemoryBound(to: DdTableResults.self)
+                return base[i]
+            }
+
+            var parResDealer = ParResultsDealer()
+            var mutableTable = tableResult
+            let parRes = DealerPar(&mutableTable, &parResDealer, dealers[i], vulns[i])
+            try checkDDS(parRes)
+
+            let par = DDSFormatting.formatDealerPar(DDSParResultsDealer(parResDealer))
+            let table = DDSFormatting.formatTable(DDSTableResults(tableResult))
+
+            results.append(BoardResult(optimumScore: par, optimumResultTable: table))
+        }
+
+        return results
     }
 
     // MARK: - Single Board Solve (PBN)
@@ -139,32 +124,28 @@ public enum DDSSolver {
         currentTrickRank: [Int32] = [0, 0, 0],
         threadIndex: Int32 = 0
     ) throws -> DDSFutureTricks {
-        try ddsQueue.sync {
-            SetMaxThreads(0)
+        var dlPBN = DealPBN()
+        dlPBN.trump = trump
+        dlPBN.first = first
+        dlPBN.currentTrickSuit.0 = currentTrickSuit[0]
+        dlPBN.currentTrickSuit.1 = currentTrickSuit[1]
+        dlPBN.currentTrickSuit.2 = currentTrickSuit[2]
+        dlPBN.currentTrickRank.0 = currentTrickRank[0]
+        dlPBN.currentTrickRank.1 = currentTrickRank[1]
+        dlPBN.currentTrickRank.2 = currentTrickRank[2]
 
-            var dlPBN = dealPBN()
-            dlPBN.trump = trump
-            dlPBN.first = first
-            dlPBN.currentTrickSuit.0 = currentTrickSuit[0]
-            dlPBN.currentTrickSuit.1 = currentTrickSuit[1]
-            dlPBN.currentTrickSuit.2 = currentTrickSuit[2]
-            dlPBN.currentTrickRank.0 = currentTrickRank[0]
-            dlPBN.currentTrickRank.1 = currentTrickRank[1]
-            dlPBN.currentTrickRank.2 = currentTrickRank[2]
-
-            pbn.withCString { cstr in
-                withUnsafeMutablePointer(to: &dlPBN.remainCards) { ptr in
-                    let dest = UnsafeMutableRawPointer(ptr).assumingMemoryBound(to: CChar.self)
-                    strcpy(dest, cstr)
-                }
+        pbn.withCString { cstr in
+            withUnsafeMutablePointer(to: &dlPBN.remainCards) { ptr in
+                let dest = UnsafeMutableRawPointer(ptr).assumingMemoryBound(to: CChar.self)
+                strcpy(dest, cstr)
             }
-
-            var futp = futureTricks()
-            let res = SolveBoardPBN(dlPBN, target, solutions, mode, &futp, threadIndex)
-            try checkDDS(res)
-
-            return DDSFutureTricks(futp)
         }
+
+        var futp = FutureTricks()
+        let res = SolveBoardPBN(dlPBN, target, solutions, mode, &futp, threadIndex)
+        try checkDDS(res)
+
+        return DDSFutureTricks(futp)
     }
 
     // MARK: - Single Board Solve (Binary)
@@ -186,16 +167,12 @@ public enum DDSSolver {
         mode: Int32,
         threadIndex: Int32 = 0
     ) throws -> DDSFutureTricks {
-        try ddsQueue.sync {
-            SetMaxThreads(0)
+        let dl = deal.toCDeal()
+        var futp = FutureTricks()
+        let res = SolveBoard(dl, target, solutions, mode, &futp, threadIndex)
+        try checkDDS(res)
 
-            let dl = deal.toCDeal()
-            var futp = futureTricks()
-            let res = SolveBoard(dl, target, solutions, mode, &futp, threadIndex)
-            try checkDDS(res)
-
-            return DDSFutureTricks(futp)
-        }
+        return DDSFutureTricks(futp)
     }
 
     // MARK: - Batch Solve
@@ -212,60 +189,55 @@ public enum DDSSolver {
     public static func solveAllBoards(
         boards: [(pbn: String, trump: Int32, first: Int32, currentTrickSuit: [Int32], currentTrickRank: [Int32], target: Int32, solutions: Int32, mode: Int32)]
     ) throws -> [DDSFutureTricks] {
-        try ddsQueue.sync {
-            SetMaxThreads(0)
+        var bop = BoardsPBN()
+        bop.no_of_boards = Int32(boards.count)
 
-            var bop = boardsPBN()
-            bop.noOfBoards = Int32(boards.count)
-
-            withUnsafeMutablePointer(to: &bop.deals) { dealsPtr in
-                let base = UnsafeMutableRawPointer(dealsPtr).assumingMemoryBound(to: dealPBN.self)
-                for (i, board) in boards.enumerated() {
-                    base[i].trump = board.trump
-                    base[i].first = board.first
-                    let ts = board.currentTrickSuit, tr = board.currentTrickRank
-                    base[i].currentTrickSuit = (ts.count > 0 ? ts[0] : 0, ts.count > 1 ? ts[1] : 0, ts.count > 2 ? ts[2] : 0)
-                    base[i].currentTrickRank = (tr.count > 0 ? tr[0] : 0, tr.count > 1 ? tr[1] : 0, tr.count > 2 ? tr[2] : 0)
-                    board.pbn.withCString { cstr in
-                        withUnsafeMutablePointer(to: &base[i].remainCards) { ptr in
-                            let dest = UnsafeMutableRawPointer(ptr).assumingMemoryBound(to: CChar.self)
-                            strcpy(dest, cstr)
-                        }
+        withUnsafeMutablePointer(to: &bop.deals) { dealsPtr in
+            let base = UnsafeMutableRawPointer(dealsPtr).assumingMemoryBound(to: DealPBN.self)
+            for (i, board) in boards.enumerated() {
+                base[i].trump = board.trump
+                base[i].first = board.first
+                let ts = board.currentTrickSuit, tr = board.currentTrickRank
+                base[i].currentTrickSuit = (ts.count > 0 ? ts[0] : 0, ts.count > 1 ? ts[1] : 0, ts.count > 2 ? ts[2] : 0)
+                base[i].currentTrickRank = (tr.count > 0 ? tr[0] : 0, tr.count > 1 ? tr[1] : 0, tr.count > 2 ? tr[2] : 0)
+                board.pbn.withCString { cstr in
+                    withUnsafeMutablePointer(to: &base[i].remainCards) { ptr in
+                        let dest = UnsafeMutableRawPointer(ptr).assumingMemoryBound(to: CChar.self)
+                        strcpy(dest, cstr)
                     }
                 }
             }
-
-            withUnsafeMutablePointer(to: &bop.target) { ptr in
-                ptr.withMemoryRebound(to: Int32.self, capacity: 200) { base in
-                    for (i, board) in boards.enumerated() { base[i] = board.target }
-                }
-            }
-            withUnsafeMutablePointer(to: &bop.solutions) { ptr in
-                ptr.withMemoryRebound(to: Int32.self, capacity: 200) { base in
-                    for (i, board) in boards.enumerated() { base[i] = board.solutions }
-                }
-            }
-            withUnsafeMutablePointer(to: &bop.mode) { ptr in
-                ptr.withMemoryRebound(to: Int32.self, capacity: 200) { base in
-                    for (i, board) in boards.enumerated() { base[i] = board.mode }
-                }
-            }
-
-            var solved = solvedBoards()
-            let res = SolveAllBoards(&bop, &solved)
-            try checkDDS(res)
-
-            var results: [DDSFutureTricks] = []
-            withUnsafePointer(to: solved.solvedBoard) { ptr in
-                let base = UnsafeRawPointer(ptr).assumingMemoryBound(to: futureTricks.self)
-                for i in 0..<boards.count {
-                    results.append(DDSFutureTricks(base[i]))
-                }
-            }
-
-            FreeMemory()
-            return results
         }
+
+        withUnsafeMutablePointer(to: &bop.target) { ptr in
+            ptr.withMemoryRebound(to: Int32.self, capacity: 200) { base in
+                for (i, board) in boards.enumerated() { base[i] = board.target }
+            }
+        }
+        withUnsafeMutablePointer(to: &bop.solutions) { ptr in
+            ptr.withMemoryRebound(to: Int32.self, capacity: 200) { base in
+                for (i, board) in boards.enumerated() { base[i] = board.solutions }
+            }
+        }
+        withUnsafeMutablePointer(to: &bop.mode) { ptr in
+            ptr.withMemoryRebound(to: Int32.self, capacity: 200) { base in
+                for (i, board) in boards.enumerated() { base[i] = board.mode }
+            }
+        }
+
+        var solved = SolvedBoards()
+        let res = SolveAllBoards(&bop, &solved)
+        try checkDDS(res)
+
+        var results: [DDSFutureTricks] = []
+        withUnsafePointer(to: solved.solved_board) { ptr in
+            let base = UnsafeRawPointer(ptr).assumingMemoryBound(to: FutureTricks.self)
+            for i in 0..<boards.count {
+                results.append(DDSFutureTricks(base[i]))
+            }
+        }
+
+        return results
     }
 
     // MARK: - DD Table Calculation
@@ -276,26 +248,22 @@ public enum DDSSolver {
     /// - Returns: `DDSTableResults` with the 5x4 trick matrix.
     /// - Throws: `DDSError` if DDS returns an error code.
     public static func calcDDTable(deal: [[UInt32]]) throws -> DDSTableResults {
-        try ddsQueue.sync {
-            SetMaxThreads(0)
-
-            var tableDeal = ddTableDeal()
-            withUnsafeMutablePointer(to: &tableDeal.cards) { ptr in
-                ptr.withMemoryRebound(to: UInt32.self, capacity: 16) { base in
-                    for hand in 0..<4 {
-                        for suit in 0..<4 {
-                            base[hand * 4 + suit] = deal[hand][suit]
-                        }
+        var tableDeal = DdTableDeal()
+        withUnsafeMutablePointer(to: &tableDeal.cards) { ptr in
+            ptr.withMemoryRebound(to: UInt32.self, capacity: 16) { base in
+                for hand in 0..<4 {
+                    for suit in 0..<4 {
+                        base[hand * 4 + suit] = deal[hand][suit]
                     }
                 }
             }
-
-            var tableResult = ddTableResults()
-            let res = CalcDDtable(tableDeal, &tableResult)
-            try checkDDS(res)
-
-            return DDSTableResults(tableResult)
         }
+
+        var tableResult = DdTableResults()
+        let res = CalcDDtable(tableDeal, &tableResult)
+        try checkDDS(res)
+
+        return DDSTableResults(tableResult)
     }
 
     /// Calculates the DD table for a single deal using PBN format.
@@ -304,23 +272,19 @@ public enum DDSSolver {
     /// - Returns: `DDSTableResults` with the 5x4 trick matrix.
     /// - Throws: `DDSError` if DDS returns an error code.
     public static func calcDDTablePBN(pbn: String) throws -> DDSTableResults {
-        try ddsQueue.sync {
-            SetMaxThreads(0)
-
-            var tableDealPBN = ddTableDealPBN()
-            pbn.withCString { cstr in
-                withUnsafeMutablePointer(to: &tableDealPBN.cards) { ptr in
-                    let dest = UnsafeMutableRawPointer(ptr).assumingMemoryBound(to: CChar.self)
-                    strcpy(dest, cstr)
-                }
+        var tableDealPBN = DdTableDealPBN()
+        pbn.withCString { cstr in
+            withUnsafeMutablePointer(to: &tableDealPBN.cards) { ptr in
+                let dest = UnsafeMutableRawPointer(ptr).assumingMemoryBound(to: CChar.self)
+                strcpy(dest, cstr)
             }
-
-            var tableResult = ddTableResults()
-            let res = CalcDDtablePBN(tableDealPBN, &tableResult)
-            try checkDDS(res)
-
-            return DDSTableResults(tableResult)
         }
+
+        var tableResult = DdTableResults()
+        let res = CalcDDtablePBN(tableDealPBN, &tableResult)
+        try checkDDS(res)
+
+        return DDSTableResults(tableResult)
     }
 
     // MARK: - Par Calculation
@@ -333,13 +297,11 @@ public enum DDSSolver {
     /// - Returns: `DDSParResults` with NS/EW par scores and contract strings.
     /// - Throws: `DDSError` if DDS returns an error code.
     public static func par(table: DDSTableResults, vulnerable: Int32) throws -> DDSParResults {
-        try ddsQueue.sync {
-            var cTable = Self.toCTableResults(table)
-            var parRes = parResults()
-            let res = Par(&cTable, &parRes, vulnerable)
-            try checkDDS(res)
-            return DDSParResults(parRes)
-        }
+        var cTable = Self.toCTableResults(table)
+        var parRes = ParResults()
+        let res = Par(&cTable, &parRes, vulnerable)
+        try checkDDS(res)
+        return DDSParResults(parRes)
     }
 
     /// Calculates par from a specific dealer's perspective.
@@ -355,13 +317,11 @@ public enum DDSSolver {
         dealer: Int32,
         vulnerable: Int32
     ) throws -> DDSParResultsDealer {
-        try ddsQueue.sync {
-            var cTable = Self.toCTableResults(table)
-            var parRes = parResultsDealer()
-            let res = DealerPar(&cTable, &parRes, dealer, vulnerable)
-            try checkDDS(res)
-            return DDSParResultsDealer(parRes)
-        }
+        var cTable = Self.toCTableResults(table)
+        var parRes = ParResultsDealer()
+        let res = DealerPar(&cTable, &parRes, dealer, vulnerable)
+        try checkDDS(res)
+        return DDSParResultsDealer(parRes)
     }
 
     /// Calculates par for both sides.
@@ -375,17 +335,15 @@ public enum DDSSolver {
         table: DDSTableResults,
         vulnerable: Int32
     ) throws -> (DDSParResultsDealer, DDSParResultsDealer) {
-        try ddsQueue.sync {
-            var cTable = Self.toCTableResults(table)
-            var sidesRes: (parResultsDealer, parResultsDealer) = (parResultsDealer(), parResultsDealer())
-            let res = withUnsafeMutablePointer(to: &sidesRes) { ptr in
-                ptr.withMemoryRebound(to: parResultsDealer.self, capacity: 2) { base in
-                    SidesPar(&cTable, base, vulnerable)
-                }
+        var cTable = Self.toCTableResults(table)
+        var sidesRes: (ParResultsDealer, ParResultsDealer) = (ParResultsDealer(), ParResultsDealer())
+        let res = withUnsafeMutablePointer(to: &sidesRes) { ptr in
+            ptr.withMemoryRebound(to: ParResultsDealer.self, capacity: 2) { base in
+                SidesPar(&cTable, base, vulnerable)
             }
-            try checkDDS(res)
-            return (DDSParResultsDealer(sidesRes.0), DDSParResultsDealer(sidesRes.1))
         }
+        try checkDDS(res)
+        return (DDSParResultsDealer(sidesRes.0), DDSParResultsDealer(sidesRes.1))
     }
 
     /// Calculates structured par from a specific dealer's perspective.
@@ -401,13 +359,11 @@ public enum DDSSolver {
         dealer: Int32,
         vulnerable: Int32
     ) throws -> DDSParResultsMaster {
-        try ddsQueue.sync {
-            var cTable = Self.toCTableResults(table)
-            var parRes = parResultsMaster()
-            let res = DealerParBin(&cTable, &parRes, dealer, vulnerable)
-            try checkDDS(res)
-            return DDSParResultsMaster(parRes)
-        }
+        var cTable = Self.toCTableResults(table)
+        var parRes = ParResultsMaster()
+        let res = DealerParBin(&cTable, &parRes, dealer, vulnerable)
+        try checkDDS(res)
+        return DDSParResultsMaster(parRes)
     }
 
     /// Calculates structured par for both sides.
@@ -421,17 +377,15 @@ public enum DDSSolver {
         table: DDSTableResults,
         vulnerable: Int32
     ) throws -> (DDSParResultsMaster, DDSParResultsMaster) {
-        try ddsQueue.sync {
-            var cTable = Self.toCTableResults(table)
-            var sidesRes: (parResultsMaster, parResultsMaster) = (parResultsMaster(), parResultsMaster())
-            let res = withUnsafeMutablePointer(to: &sidesRes) { ptr in
-                ptr.withMemoryRebound(to: parResultsMaster.self, capacity: 2) { base in
-                    SidesParBin(&cTable, base, vulnerable)
-                }
+        var cTable = Self.toCTableResults(table)
+        var sidesRes: (ParResultsMaster, ParResultsMaster) = (ParResultsMaster(), ParResultsMaster())
+        let res = withUnsafeMutablePointer(to: &sidesRes) { ptr in
+            ptr.withMemoryRebound(to: ParResultsMaster.self, capacity: 2) { base in
+                SidesParBin(&cTable, base, vulnerable)
             }
-            try checkDDS(res)
-            return (DDSParResultsMaster(sidesRes.0), DDSParResultsMaster(sidesRes.1))
         }
+        try checkDDS(res)
+        return (DDSParResultsMaster(sidesRes.0), DDSParResultsMaster(sidesRes.1))
     }
 
     /// Converts a structured par result to dealer text format.
@@ -440,13 +394,11 @@ public enum DDSSolver {
     /// - Returns: Formatted dealer text string.
     /// - Throws: `DDSError` if DDS returns an error code.
     public static func convertToDealerTextFormat(par: DDSParResultsMaster) throws -> String {
-        try ddsQueue.sync {
-            var cPar = Self.toCParResultsMaster(par)
-            var buffer = [CChar](repeating: 0, count: 768)
-            let res = ConvertToDealerTextFormat(&cPar, &buffer)
-            try checkDDS(res)
-            return String(cString: buffer)
-        }
+        var cPar = Self.toCParResultsMaster(par)
+        var buffer = [CChar](repeating: 0, count: 768)
+        let res = ConvertToDealerTextFormat(&cPar, &buffer)
+        try checkDDS(res)
+        return String(cString: buffer)
     }
 
     /// Converts structured par results for both sides to text format.
@@ -457,20 +409,18 @@ public enum DDSSolver {
     public static func convertToSidesTextFormat(
         sides: (DDSParResultsMaster, DDSParResultsMaster)
     ) throws -> DDSParTextResults {
-        try ddsQueue.sync {
-            var cSides: (parResultsMaster, parResultsMaster) = (
-                Self.toCParResultsMaster(sides.0),
-                Self.toCParResultsMaster(sides.1)
-            )
-            var textRes = parTextResults()
-            let res = withUnsafeMutablePointer(to: &cSides) { ptr in
-                ptr.withMemoryRebound(to: parResultsMaster.self, capacity: 2) { base in
-                    ConvertToSidesTextFormat(base, &textRes)
-                }
+        var cSides: (ParResultsMaster, ParResultsMaster) = (
+            Self.toCParResultsMaster(sides.0),
+            Self.toCParResultsMaster(sides.1)
+        )
+        var textRes = ParTextResults()
+        let res = withUnsafeMutablePointer(to: &cSides) { ptr in
+            ptr.withMemoryRebound(to: ParResultsMaster.self, capacity: 2) { base in
+                ConvertToSidesTextFormat(base, &textRes)
             }
-            try checkDDS(res)
-            return DDSParTextResults(textRes)
         }
+        try checkDDS(res)
+        return DDSParTextResults(textRes)
     }
 
     // MARK: - Play Analysis
@@ -488,16 +438,12 @@ public enum DDSSolver {
         play: DDSPlayTrace,
         threadIndex: Int32 = 0
     ) throws -> DDSSolvedPlay {
-        try ddsQueue.sync {
-            SetMaxThreads(0)
-
-            let dl = deal.toCDeal()
-            let pt = play.toCPlayTrace()
-            var solved = solvedPlay()
-            let res = AnalysePlayBin(dl, pt, &solved, threadIndex)
-            try checkDDS(res)
-            return DDSSolvedPlay(solved)
-        }
+        let dl = deal.toCDeal()
+        let pt = play.toCPlayTrace()
+        var solved = SolvedPlay()
+        let res = AnalysePlayBin(dl, pt, &solved, threadIndex)
+        try checkDDS(res)
+        return DDSSolvedPlay(solved)
     }
 
     /// Analyses a play sequence for a single deal using PBN format.
@@ -513,27 +459,23 @@ public enum DDSSolver {
         play: DDSPlayTracePBN,
         threadIndex: Int32 = 0
     ) throws -> DDSSolvedPlay {
-        try ddsQueue.sync {
-            SetMaxThreads(0)
-
-            var dlPBN = dealPBN()
-            dlPBN.trump = deal.trump
-            dlPBN.first = deal.first
-            dlPBN.currentTrickSuit = (0, 0, 0)
-            dlPBN.currentTrickRank = (0, 0, 0)
-            deal.pbn.withCString { cstr in
-                withUnsafeMutablePointer(to: &dlPBN.remainCards) { ptr in
-                    let dest = UnsafeMutableRawPointer(ptr).assumingMemoryBound(to: CChar.self)
-                    strcpy(dest, cstr)
-                }
+        var dlPBN = DealPBN()
+        dlPBN.trump = deal.trump
+        dlPBN.first = deal.first
+        dlPBN.currentTrickSuit = (0, 0, 0)
+        dlPBN.currentTrickRank = (0, 0, 0)
+        deal.pbn.withCString { cstr in
+            withUnsafeMutablePointer(to: &dlPBN.remainCards) { ptr in
+                let dest = UnsafeMutableRawPointer(ptr).assumingMemoryBound(to: CChar.self)
+                strcpy(dest, cstr)
             }
-
-            let pt = play.toCPlayTracePBN()
-            var solved = solvedPlay()
-            let res = AnalysePlayPBN(dlPBN, pt, &solved, threadIndex)
-            try checkDDS(res)
-            return DDSSolvedPlay(solved)
         }
+
+        let pt = play.toCPlayTracePBN()
+        var solved = SolvedPlay()
+        let res = AnalysePlayPBN(dlPBN, pt, &solved, threadIndex)
+        try checkDDS(res)
+        return DDSSolvedPlay(solved)
     }
 
     /// Analyses play sequences for multiple deals in parallel using binary format.
@@ -549,59 +491,53 @@ public enum DDSSolver {
         plays: [DDSPlayTrace],
         chunkSize: Int32 = 1
     ) throws -> [DDSSolvedPlay] {
-        try ddsQueue.sync {
-            SetMaxThreads(0)
+        var bop = Boards()
+        bop.no_of_boards = Int32(boards.count)
 
-            var bop = DDS.boards()
-            bop.noOfBoards = Int32(boards.count)
-
-            withUnsafeMutablePointer(to: &bop.deals) { ptr in
-                let base = UnsafeMutableRawPointer(ptr).assumingMemoryBound(to: deal.self)
-                for (i, board) in boards.enumerated() {
-                    base[i] = board.toCDeal()
-                }
+        withUnsafeMutablePointer(to: &bop.deals) { ptr in
+            let base = UnsafeMutableRawPointer(ptr).assumingMemoryBound(to: Deal.self)
+            for (i, board) in boards.enumerated() {
+                base[i] = board.toCDeal()
             }
-            // target, solutions, mode default to -1, 3, 0 for play analysis
-            withUnsafeMutablePointer(to: &bop.target) { ptr in
-                ptr.withMemoryRebound(to: Int32.self, capacity: 200) { base in
-                    for i in 0..<boards.count { base[i] = -1 }
-                }
-            }
-            withUnsafeMutablePointer(to: &bop.solutions) { ptr in
-                ptr.withMemoryRebound(to: Int32.self, capacity: 200) { base in
-                    for i in 0..<boards.count { base[i] = 3 }
-                }
-            }
-            withUnsafeMutablePointer(to: &bop.mode) { ptr in
-                ptr.withMemoryRebound(to: Int32.self, capacity: 200) { base in
-                    for i in 0..<boards.count { base[i] = 0 }
-                }
-            }
-
-            var plp = playTracesBin()
-            plp.noOfBoards = Int32(plays.count)
-            withUnsafeMutablePointer(to: &plp.plays) { ptr in
-                let base = UnsafeMutableRawPointer(ptr).assumingMemoryBound(to: playTraceBin.self)
-                for (i, play) in plays.enumerated() {
-                    base[i] = play.toCPlayTrace()
-                }
-            }
-
-            var solvedp = solvedPlays()
-            let res = AnalyseAllPlaysBin(&bop, &plp, &solvedp, chunkSize)
-            try checkDDS(res)
-
-            var results: [DDSSolvedPlay] = []
-            withUnsafePointer(to: solvedp.solved) { ptr in
-                let base = UnsafeRawPointer(ptr).assumingMemoryBound(to: solvedPlay.self)
-                for i in 0..<boards.count {
-                    results.append(DDSSolvedPlay(base[i]))
-                }
-            }
-
-            FreeMemory()
-            return results
         }
+        withUnsafeMutablePointer(to: &bop.target) { ptr in
+            ptr.withMemoryRebound(to: Int32.self, capacity: 200) { base in
+                for i in 0..<boards.count { base[i] = -1 }
+            }
+        }
+        withUnsafeMutablePointer(to: &bop.solutions) { ptr in
+            ptr.withMemoryRebound(to: Int32.self, capacity: 200) { base in
+                for i in 0..<boards.count { base[i] = 3 }
+            }
+        }
+        withUnsafeMutablePointer(to: &bop.mode) { ptr in
+            ptr.withMemoryRebound(to: Int32.self, capacity: 200) { base in
+                for i in 0..<boards.count { base[i] = 0 }
+            }
+        }
+
+        var plp = PlayTracesBin()
+        plp.no_of_boards = Int32(plays.count)
+        withUnsafeMutablePointer(to: &plp.plays) { ptr in
+            let base = UnsafeMutableRawPointer(ptr).assumingMemoryBound(to: PlayTraceBin.self)
+            for (i, play) in plays.enumerated() {
+                base[i] = play.toCPlayTrace()
+            }
+        }
+
+        var solvedp = SolvedPlays()
+        let res = AnalyseAllPlaysBin(&bop, &plp, &solvedp, chunkSize)
+        try checkDDS(res)
+
+        var results: [DDSSolvedPlay] = []
+        withUnsafePointer(to: solvedp.solved) { ptr in
+            let base = UnsafeRawPointer(ptr).assumingMemoryBound(to: SolvedPlay.self)
+            for i in 0..<boards.count {
+                results.append(DDSSolvedPlay(base[i]))
+            }
+        }
+
+        return results
     }
 
     /// Analyses play sequences for multiple deals in parallel using PBN format.
@@ -617,75 +553,70 @@ public enum DDSSolver {
         plays: [DDSPlayTracePBN],
         chunkSize: Int32 = 1
     ) throws -> [DDSSolvedPlay] {
-        try ddsQueue.sync {
-            SetMaxThreads(0)
+        var bop = BoardsPBN()
+        bop.no_of_boards = Int32(boards.count)
 
-            var bop = boardsPBN()
-            bop.noOfBoards = Int32(boards.count)
-
-            withUnsafeMutablePointer(to: &bop.deals) { dealsPtr in
-                let base = UnsafeMutableRawPointer(dealsPtr).assumingMemoryBound(to: dealPBN.self)
-                for (i, board) in boards.enumerated() {
-                    base[i].trump = board.trump
-                    base[i].first = board.first
-                    base[i].currentTrickSuit = (0, 0, 0)
-                    base[i].currentTrickRank = (0, 0, 0)
-                    board.pbn.withCString { cstr in
-                        withUnsafeMutablePointer(to: &base[i].remainCards) { ptr in
-                            let dest = UnsafeMutableRawPointer(ptr).assumingMemoryBound(to: CChar.self)
-                            strcpy(dest, cstr)
-                        }
+        withUnsafeMutablePointer(to: &bop.deals) { dealsPtr in
+            let base = UnsafeMutableRawPointer(dealsPtr).assumingMemoryBound(to: DealPBN.self)
+            for (i, board) in boards.enumerated() {
+                base[i].trump = board.trump
+                base[i].first = board.first
+                base[i].currentTrickSuit = (0, 0, 0)
+                base[i].currentTrickRank = (0, 0, 0)
+                board.pbn.withCString { cstr in
+                    withUnsafeMutablePointer(to: &base[i].remainCards) { ptr in
+                        let dest = UnsafeMutableRawPointer(ptr).assumingMemoryBound(to: CChar.self)
+                        strcpy(dest, cstr)
                     }
                 }
             }
-            withUnsafeMutablePointer(to: &bop.target) { ptr in
-                ptr.withMemoryRebound(to: Int32.self, capacity: 200) { base in
-                    for i in 0..<boards.count { base[i] = -1 }
-                }
-            }
-            withUnsafeMutablePointer(to: &bop.solutions) { ptr in
-                ptr.withMemoryRebound(to: Int32.self, capacity: 200) { base in
-                    for i in 0..<boards.count { base[i] = 3 }
-                }
-            }
-            withUnsafeMutablePointer(to: &bop.mode) { ptr in
-                ptr.withMemoryRebound(to: Int32.self, capacity: 200) { base in
-                    for i in 0..<boards.count { base[i] = 0 }
-                }
-            }
-
-            var plp = playTracesPBN()
-            plp.noOfBoards = Int32(plays.count)
-            withUnsafeMutablePointer(to: &plp.plays) { ptr in
-                let base = UnsafeMutableRawPointer(ptr).assumingMemoryBound(to: playTracePBN.self)
-                for (i, play) in plays.enumerated() {
-                    base[i] = play.toCPlayTracePBN()
-                }
-            }
-
-            var solvedp = solvedPlays()
-            let res = AnalyseAllPlaysPBN(&bop, &plp, &solvedp, chunkSize)
-            try checkDDS(res)
-
-            var results: [DDSSolvedPlay] = []
-            withUnsafePointer(to: solvedp.solved) { ptr in
-                let base = UnsafeRawPointer(ptr).assumingMemoryBound(to: solvedPlay.self)
-                for i in 0..<boards.count {
-                    results.append(DDSSolvedPlay(base[i]))
-                }
-            }
-
-            FreeMemory()
-            return results
         }
+        withUnsafeMutablePointer(to: &bop.target) { ptr in
+            ptr.withMemoryRebound(to: Int32.self, capacity: 200) { base in
+                for i in 0..<boards.count { base[i] = -1 }
+            }
+        }
+        withUnsafeMutablePointer(to: &bop.solutions) { ptr in
+            ptr.withMemoryRebound(to: Int32.self, capacity: 200) { base in
+                for i in 0..<boards.count { base[i] = 3 }
+            }
+        }
+        withUnsafeMutablePointer(to: &bop.mode) { ptr in
+            ptr.withMemoryRebound(to: Int32.self, capacity: 200) { base in
+                for i in 0..<boards.count { base[i] = 0 }
+            }
+        }
+
+        var plp = PlayTracesPBN()
+        plp.no_of_boards = Int32(plays.count)
+        withUnsafeMutablePointer(to: &plp.plays) { ptr in
+            let base = UnsafeMutableRawPointer(ptr).assumingMemoryBound(to: PlayTracePBN.self)
+            for (i, play) in plays.enumerated() {
+                base[i] = play.toCPlayTracePBN()
+            }
+        }
+
+        var solvedp = SolvedPlays()
+        let res = AnalyseAllPlaysPBN(&bop, &plp, &solvedp, chunkSize)
+        try checkDDS(res)
+
+        var results: [DDSSolvedPlay] = []
+        withUnsafePointer(to: solvedp.solved) { ptr in
+            let base = UnsafeRawPointer(ptr).assumingMemoryBound(to: SolvedPlay.self)
+            for i in 0..<boards.count {
+                results.append(DDSSolvedPlay(base[i]))
+            }
+        }
+
+        return results
     }
 
     // MARK: - Internal Helpers
 
-    /// Converts a Swift `DDSTableResults` back to the C `ddTableResults` struct.
-    private static func toCTableResults(_ table: DDSTableResults) -> ddTableResults {
-        var cTable = ddTableResults()
-        withUnsafeMutablePointer(to: &cTable.resTable) { ptr in
+    /// Converts a Swift `DDSTableResults` back to the C `DdTableResults` struct.
+    private static func toCTableResults(_ table: DDSTableResults) -> DdTableResults {
+        var cTable = DdTableResults()
+        withUnsafeMutablePointer(to: &cTable.res_table) { ptr in
             ptr.withMemoryRebound(to: Int32.self, capacity: 20) { base in
                 for strain in 0..<5 {
                     for hand in 0..<4 {
@@ -697,16 +628,16 @@ public enum DDSSolver {
         return cTable
     }
 
-    /// Converts a Swift `DDSParResultsMaster` back to the C `parResultsMaster` struct.
-    private static func toCParResultsMaster(_ par: DDSParResultsMaster) -> parResultsMaster {
-        var cPar = parResultsMaster()
+    /// Converts a Swift `DDSParResultsMaster` back to the C `ParResultsMaster` struct.
+    private static func toCParResultsMaster(_ par: DDSParResultsMaster) -> ParResultsMaster {
+        var cPar = ParResultsMaster()
         cPar.score = par.score
         cPar.number = par.number
         withUnsafeMutablePointer(to: &cPar.contracts) { ptr in
-            let base = UnsafeMutableRawPointer(ptr).assumingMemoryBound(to: contractType.self)
+            let base = UnsafeMutableRawPointer(ptr).assumingMemoryBound(to: ContractType.self)
             for (i, contract) in par.contracts.enumerated() {
-                base[i].underTricks = contract.underTricks
-                base[i].overTricks = contract.overTricks
+                base[i].under_tricks = contract.underTricks
+                base[i].over_tricks = contract.overTricks
                 base[i].level = contract.level
                 base[i].denom = contract.denom
                 base[i].seats = contract.seats

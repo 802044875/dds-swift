@@ -1,8 +1,8 @@
 # dds-swift
 
-Swift Package Manager wrapper for the [DDS (Double Dummy Solver)](https://github.com/dds-bridge/dds) bridge hand solver, with iOS and macOS sandbox patches.
+Swift Package Manager wrapper for the [DDS (Double Dummy Solver)](https://github.com/dds-bridge/dds) bridge hand solver.
 
-This is a fork of the upstream DDS 2.9.0 C/C++ library (dormant since July 2020), restructured as an SPM package with a pure Swift API layer.
+Vendors DDS 3.1.0 (C++20, actively maintained) and exposes it to Swift via Swift/C++ interop — no plain-C shim, no Objective-C bridging header. All C++ types are hidden behind `internal import`; consumers see only Swift types.
 
 ## Installation
 
@@ -10,33 +10,33 @@ Add the package dependency to your `Package.swift`:
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/802044875/dds-swift.git", from: "2.10.0")
+    .package(url: "https://github.com/802044875/dds-swift.git", from: "3.1.0")
 ]
 ```
 
-Then add the product dependency to your target:
+Then add the product dependency to your target. Because the DDS module map carries `requires cplusplus`, every Swift target that transitively imports DDSSwift must enable C++ interop:
 
 ```swift
-.target(name: "YourTarget", dependencies: [
-    .product(name: "DDSSwift", package: "dds-swift")
-])
+.target(
+    name: "YourTarget",
+    dependencies: [
+        .product(name: "DDSSwift", package: "dds-swift")
+    ],
+    swiftSettings: [.interoperabilityMode(.Cxx)]
+)
 ```
 
-## Patches vs Upstream
+## Integration approach
 
-This fork applies patches to the upstream DDS source. The upstream repository has not been updated since July 2020 and does not contain these fixes.
+DDS 3.1.0 is a C++20 library. This package uses Swift/C++ interop (`.interoperabilityMode(.Cxx)`) to import the DDS module directly — no plain-C shim required.
 
-### `src/System.cpp` — Memory Detection Fix
+The module map lives at `library/src/module.modulemap` with `publicHeadersPath: "library/src"`, so all transitive includes (e.g. `<utility/constants.h>`) resolve correctly via the same include path.
 
-Replaced `popen("sysctl -n hw.memsize")` with `sysctlbyname()` C API call. The `popen` approach spawns a shell which fails in the iOS simulator sandbox (`sh: sysctl: command not found`), causing DDS to detect 0 KB of memory. The `sysctlbyname()` call works in all Apple environments. Fallback chain retained: `os_proc_available_memory()` on iOS, then 1.4 GB hardcoded fallback.
-
-### `Sources/DDSSwift/DDSSolver.swift` — Thread Safety
-
-All public `DDSSolver` methods are serialized via a `DispatchQueue` to prevent concurrent access to DDS global mutable state (`memory`, `scheduler`, `cparam`, `threadMgr`). DDS handles internal parallelism via `dispatch_apply`, so serializing external calls does not reduce throughput.
+DDS 3.1.0 is **thread-safe by construction** via `SolverContext`-based parallelism. No external serialisation queue is needed; concurrent calls to `DDSSolver` methods are safe.
 
 ## Swift API
 
-The `DDSSwift` module provides a pure Swift interface to the DDS C library. All C types are hidden behind `internal import` — consumers only see Swift types.
+The `DDSSwift` module provides a pure Swift interface. All C++ types are hidden behind `internal import`.
 
 Wraps all recommended DDS functions. Deprecated functions (`CalcPar`, `CalcParPBN`) and superseded functions (`SolveAllChunks*`) are intentionally excluded.
 
@@ -82,9 +82,8 @@ Wraps all recommended DDS functions. Deprecated functions (`CalcPar`, `CalcParPB
 | Function | DDS C Function | Description |
 |----------|---------------|-------------|
 | `DDSSolver.getInfo()` | `GetDDSInfo` | DDS version, threading, memory, and core information |
+| `DDSConfig.initialize()` | `InitializeStaticMemory` | Initialise DDS static memory (call once at startup) |
 | `DDSConfig.setMaxThreads(_:)` | `SetMaxThreads` | Set max thread count (0 = auto-detect) |
-| `DDSConfig.freeMemory()` | `FreeMemory` | Explicitly free DDS-allocated memory |
-| `DDSConfig.setThreading(_:)` | `SetThreading` | Set threading backend |
 | `DDSConfig.setResources(maxMemoryMB:maxThreads:)` | `SetResources` | Configure memory and thread limits |
 
 ### Swift Types
@@ -113,22 +112,23 @@ Run tests from the package directory:
 swift test
 ```
 
-The test suite includes 46 tests across 9 test files:
+The test suite covers 47 XCTest cases + 5 Swift Testing cases across 10 test files:
 - **DDSSolverTests** — batch DD table calculation with 18 boards and known optimum scores
 - **SolveBoardTests** — PBN and binary single-board solving with cross-validation
 - **SolveAllBoardsTests** — batch solving, verified against individual results
 - **CalcDDTableTests** — single-table DD calculation (PBN and binary) with reference data
 - **ParCalculationTests** — all par variants (Par, DealerPar, SidesPar, binary, text conversion)
 - **PlayAnalysisTests** — single and batch play analysis (PBN and binary)
-- **ConfigTests** — threading, resource configuration, memory management
+- **ConfigTests** — initialisation, resource configuration, version check
 - **ErrorTests** — invalid inputs produce correct DDSError cases
-- **ThreadSafetyTests** — rapid sequential and concurrent calls across multiple threads
+- **ThreadSafetyTests** — rapid sequential and concurrent calls (TSan-clean)
+- **StressReproductionTests** — concurrent stress: 4 parallel groups, mixed API, rapid-fire sequential
 
 ## Licence
 
 This fork retains the original **Apache 2.0** licence from upstream DDS.
 
-(c) Bo Haglund 2006-2014, (c) Bo Haglund / Soren Hein 2014-2018.
+(c) Bo Haglund 2006-2014, (c) Bo Haglund / Soren Hein 2014-2018, (c) dds-bridge contributors 2018-present.
 Swift wrapper (c) 2024-2026.
 
 See [LICENSE](LICENSE) for full licence text.
@@ -136,5 +136,5 @@ See [LICENSE](LICENSE) for full licence text.
 ## Upstream
 
 - **Repository:** https://github.com/dds-bridge/dds
-- **Version:** 2.9.0 (August 2018)
-- **Status:** Dormant since July 2020
+- **Version:** 3.1.0
+- **Status:** Actively maintained
