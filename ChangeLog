@@ -1,3 +1,33 @@
+Release Notes dds-swift 3.1.0 (fork upgrade)
+---------------------------------------------
+Upgraded vendored DDS library from 2.9.0 to 3.1.0.
+
+DDS 3.1.0 is a C++20 rewrite of the solver core with SolverContext-based
+parallelism. It is thread-safe by construction — no external serialisation
+queue is required.
+
+library/src/: Replaced src/ + include/ with upstream DDS 3.1.0 source tree
+(library/src/). C++20 required (cxxLanguageStandard: .cxx20 in Package.swift).
+Source tree includes the full DDS 3.1.0 solver: api/, heuristic_sorting/,
+lookup_tables/, moves/, solver_context/, system/, trans_table/, utility/.
+
+Package.swift: Switched from plain-C shim + module.modulemap in include/ to
+Swift/C++ interop (.interoperabilityMode(.Cxx) on DDSSwift + DDSSwiftTests).
+DDS module map now lives at library/src/module.modulemap. Every Swift target
+that transitively imports DDSSwift must declare .interoperabilityMode(.Cxx).
+
+Sources/DDSSwift/DDSSolver.swift: Removed serial DispatchQueue (ddsQueue).
+DDS 3.1.0 is thread-safe; concurrent calls to DDSSolver methods are safe.
+
+Sources/DDSSwift/DDSConfig.swift: Removed SetThreading (GCD threading backend
+removed in DDS 3.x). Removed FreeMemory (no longer needed). Added initialize()
+wrapping InitializeStaticMemory() — call once at startup before first solve.
+
+Tests/DDSSwiftTests/: Added StressReproductionTests (concurrent stress: 4
+parallel groups, mixed API, rapid-fire sequential). Total: 47 XCTest + 5
+Swift Testing cases across 10 test files. TSan gate: zero race reports.
+
+
 Release Notes DDS 2.10.1 (dds-swift fork)
 ------------------------------------------
 Fixed concurrent access crash and iOS simulator sysctl warning.
