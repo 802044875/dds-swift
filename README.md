@@ -2,7 +2,7 @@
 
 Swift Package Manager wrapper for the [DDS (Double Dummy Solver)](https://github.com/dds-bridge/dds) bridge hand solver.
 
-Vendors DDS 3.1.0 (C++20, actively maintained) and exposes it to Swift via Swift/C++ interop — no plain-C shim, no Objective-C bridging header. All C++ types are hidden behind `internal import`; consumers see only Swift types.
+Vendors DDS 3.1.0 (C++20, actively maintained) and exposes it to Swift via standard Swift-C interop — no Objective-C bridging header, no Swift/C++ interop required. All C types are hidden behind `internal import`; consumers see only Swift types.
 
 ## Installation
 
@@ -10,27 +10,28 @@ Add the package dependency to your `Package.swift`:
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/802044875/dds-swift.git", from: "3.1.0")
+    .package(url: "https://github.com/802044875/dds-swift.git", from: "3.1.3")
 ]
 ```
 
-Then add the product dependency to your target. Because the DDS module map carries `requires cplusplus`, every Swift target that transitively imports DDSSwift must enable C++ interop:
+Then add the product dependency to your target:
 
 ```swift
 .target(
     name: "YourTarget",
     dependencies: [
         .product(name: "DDSSwift", package: "dds-swift")
-    ],
-    swiftSettings: [.interoperabilityMode(.Cxx)]
+    ]
 )
 ```
 
+No special `swiftSettings` are required. DDSSwift uses the C API (`dll.h`) via standard Swift-C interop.
+
 ## Integration approach
 
-DDS 3.1.0 is a C++20 library. This package uses Swift/C++ interop (`.interoperabilityMode(.Cxx)`) to import the DDS module directly — no plain-C shim required.
+DDS is implemented in C++20 internally, but exposes a pure C API via `dll.h` (`EXTERN_C` guards, plain C structs). DDSSwift imports that C API via a standard Clang module map. No Swift/C++ interop is required by consumers.
 
-The module map lives at `library/src/module.modulemap` with `publicHeadersPath: "library/src"`, so all transitive includes (e.g. `<utility/constants.h>`) resolve correctly via the same include path.
+The module map lives at `library/src/module.modulemap` with `publicHeadersPath: "library/src"`, so all transitive includes resolve correctly via the same include path.
 
 DDS 3.1.0 is **thread-safe by construction** via `SolverContext`-based parallelism. No external serialisation queue is needed; concurrent calls to `DDSSolver` methods are safe.
 
@@ -136,5 +137,5 @@ See [LICENSE](LICENSE) for full licence text.
 ## Upstream
 
 - **Repository:** https://github.com/dds-bridge/dds
-- **Version:** 3.1.0
+- **Vendored version:** 3.1.0 (with iOS/macOS patches — see ChangeLog)
 - **Status:** Actively maintained
