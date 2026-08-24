@@ -15,10 +15,20 @@
 /// @{
 
 /// Global bridge game dimensions
+// Use constexpr in C++; #define in C so the values are usable as
+// array dimensions in struct declarations (required by C99 constant-expr rules)
+// and so the module map compiles in C mode (no `requires cplusplus`).
+#ifdef __cplusplus
 constexpr int DDS_STRAINS = 5;  ///< Number of strains (4 suits + no trump)
 constexpr int DDS_HANDS = 4;    ///< Number of hands (N/E/S/W)
 constexpr int DDS_SUITS = 4;    ///< Number of suits (S/H/D/C)
 constexpr int DDS_NOTRUMP = 4;  ///< No trump strain index
+#else
+#define DDS_STRAINS 5
+#define DDS_HANDS   4
+#define DDS_SUITS   4
+#define DDS_NOTRUMP 4
+#endif
 
 /// @name Hand Relationship Arrays
 /// Precomputed lookup tables for hand relationships. Each array maps

@@ -385,7 +385,7 @@ struct SolvedPlays
 struct DDSInfo
 {
   // Version 2.8.0 has 2, 8, 0 and a string of 2.8.0
-  int major, minor, patch; 
+  int major, minor, patch;
   char version_string[10];
 
   // Currently 0 = unknown, 1 = Windows, 2 = Cygwin, 3 = Linux, 4 = Apple
@@ -403,10 +403,10 @@ struct DDSInfo
 
   int numCores;
 
-  // Currently 
-  // 0 = none, 
-  // 1 = Windows (native), 
-  // 2 = OpenMP, 
+  // Currently
+  // 0 = none,
+  // 1 = Windows (native),
+  // 2 = OpenMP,
   // 3 = GCD,
   // 4 = Boost,
   // 5 = STL,
@@ -436,7 +436,7 @@ struct DDSInfo
  * This does NOT control the number of worker threads — use the
  * SolveAllBoardsN / CalcAllTablesN family for per-call thread caps.
  */
-EXTERN_C DLLEXPORT auto STDCALL InitializeStaticMemory() -> void;
+EXTERN_C DLLEXPORT void STDCALL InitializeStaticMemory();
 
 /**
  * @brief Deprecated alias of InitializeStaticMemory().
@@ -453,8 +453,8 @@ EXTERN_C DLLEXPORT auto STDCALL InitializeStaticMemory() -> void;
  * This function is part of the legacy C API and is maintained for backward
  * compatibility. It simply forwards to InitializeStaticMemory().
  */
-EXTERN_C DLLEXPORT auto STDCALL SetMaxThreads(
-  int userThreads) -> void;
+EXTERN_C DLLEXPORT void STDCALL SetMaxThreads(
+  int userThreads);
 
 /**
  * @brief Set the threading backend used by the solver.
@@ -469,8 +469,8 @@ EXTERN_C DLLEXPORT auto STDCALL SetMaxThreads(
  * compatibility. The modern C++ API does not require threading configuration;
  * instead, create one SolverContext instance per thread.
  */
-EXTERN_C DLLEXPORT auto STDCALL SetThreading(
-  int code) -> int;
+EXTERN_C DLLEXPORT int STDCALL SetThreading(
+  int code);
 
 /**
  * @brief Set memory and thread resources for the solver.
@@ -485,9 +485,9 @@ EXTERN_C DLLEXPORT auto STDCALL SetThreading(
  * compatibility. New code should use the modern C++ API with SolverContext,
  * which provides per-instance configuration through SolverConfig.
  */
-EXTERN_C DLLEXPORT auto STDCALL SetResources(
+EXTERN_C DLLEXPORT void STDCALL SetResources(
   int maxMemoryMB,
-  int maxThreads) -> void;
+  int maxThreads);
 
 /**
  * @brief Free memory used by the solver.
@@ -500,7 +500,7 @@ EXTERN_C DLLEXPORT auto STDCALL SetResources(
  * Initialization) through SolverContext, which automatically cleans up
  * resources when the context goes out of scope. No explicit cleanup needed.
  */
-EXTERN_C DLLEXPORT auto STDCALL FreeMemory() -> void;
+EXTERN_C DLLEXPORT void STDCALL FreeMemory();
 
 /**
  * @brief Solve a single bridge Deal using double dummy analysis.
@@ -513,13 +513,13 @@ EXTERN_C DLLEXPORT auto STDCALL FreeMemory() -> void;
  * @param threadIndex Index of thread to use
  * @return 1 on success, error code otherwise
  */
-EXTERN_C DLLEXPORT auto STDCALL SolveBoard(
+EXTERN_C DLLEXPORT int STDCALL SolveBoard(
   struct Deal dl,
   int target,
   int solutions,
   int mode,
   struct FutureTricks * futp,
-  int threadIndex) -> int;
+  int threadIndex);
 
 /**
  * @brief Solve a single bridge Deal in PBN format using double dummy analysis.
@@ -532,13 +532,13 @@ EXTERN_C DLLEXPORT auto STDCALL SolveBoard(
  * @param thrId Index of thread to use
  * @return 1 on success, error code otherwise
  */
-EXTERN_C DLLEXPORT auto STDCALL SolveBoardPBN(
+EXTERN_C DLLEXPORT int STDCALL SolveBoardPBN(
   struct DealPBN dlpbn,
   int target,
   int solutions,
   int mode,
   struct FutureTricks * futp,
-  int thrId) -> int;
+  int thrId);
 
 /**
  * @brief Calculate the double dummy table for a given Deal.
@@ -547,9 +547,9 @@ EXTERN_C DLLEXPORT auto STDCALL SolveBoardPBN(
  * @param tablep Pointer to result table
  * @return 1 on success, error code otherwise
  */
-EXTERN_C DLLEXPORT auto STDCALL CalcDDtable(
+EXTERN_C DLLEXPORT int STDCALL CalcDDtable(
   struct DdTableDeal tableDeal,
-  struct DdTableResults * tablep) -> int;
+  struct DdTableResults * tablep);
 
 /**
  * @brief CalcDDtable with an explicit worker-thread cap.
@@ -557,10 +557,10 @@ EXTERN_C DLLEXPORT auto STDCALL CalcDDtable(
  * @param maxThreads Maximum worker threads; <= 0 selects the automatic
  *        (hardware_concurrency) default.
  */
-EXTERN_C DLLEXPORT auto STDCALL CalcDDtableN(
+EXTERN_C DLLEXPORT int STDCALL CalcDDtableN(
   struct DdTableDeal tableDeal,
   struct DdTableResults * tablep,
-  int maxThreads) -> int;
+  int maxThreads);
 
 /**
  * @brief Calculate the double dummy table for a PBN Deal.
@@ -569,9 +569,9 @@ EXTERN_C DLLEXPORT auto STDCALL CalcDDtableN(
  * @param tablep Pointer to result table
  * @return 1 on success, error code otherwise
  */
-EXTERN_C DLLEXPORT auto STDCALL CalcDDtablePBN(
+EXTERN_C DLLEXPORT int STDCALL CalcDDtablePBN(
   struct DdTableDealPBN tableDealPBN,
-  struct DdTableResults * tablep) -> int;
+  struct DdTableResults * tablep);
 
 /**
  * @brief CalcDDtablePBN with an explicit worker-thread cap.
@@ -579,10 +579,10 @@ EXTERN_C DLLEXPORT auto STDCALL CalcDDtablePBN(
  * @param maxThreads Maximum worker threads; <= 0 selects the automatic
  *        (hardware_concurrency) default.
  */
-EXTERN_C DLLEXPORT auto STDCALL CalcDDtablePBNN(
+EXTERN_C DLLEXPORT int STDCALL CalcDDtablePBNN(
   struct DdTableDealPBN tableDealPBN,
   struct DdTableResults * tablep,
-  int maxThreads) -> int;
+  int maxThreads);
 
 /**
  * @brief Calculate double dummy tables for multiple deals.
@@ -594,12 +594,12 @@ EXTERN_C DLLEXPORT auto STDCALL CalcDDtablePBNN(
  * @param presp Pointer to par results
  * @return 1 on success, error code otherwise
  */
-EXTERN_C DLLEXPORT auto STDCALL CalcAllTables(
+EXTERN_C DLLEXPORT int STDCALL CalcAllTables(
   struct DdTableDeals const * dealsp,
   int mode,
   int const trumpFilter[DDS_STRAINS],
   struct DdTablesRes * resp,
-  struct AllParResults * presp) -> int;
+  struct AllParResults * presp);
 
 /**
  * @brief CalcAllTables with an explicit worker-thread cap.
@@ -607,13 +607,13 @@ EXTERN_C DLLEXPORT auto STDCALL CalcAllTables(
  * @param maxThreads Maximum worker threads; <= 0 selects the automatic
  *        (hardware_concurrency) default.
  */
-EXTERN_C DLLEXPORT auto STDCALL CalcAllTablesN(
+EXTERN_C DLLEXPORT int STDCALL CalcAllTablesN(
   struct DdTableDeals const * dealsp,
   int mode,
   int const trumpFilter[DDS_STRAINS],
   struct DdTablesRes * resp,
   struct AllParResults * presp,
-  int maxThreads) -> int;
+  int maxThreads);
 
 /**
  * @brief Calculate double dummy tables for multiple PBN deals.
@@ -625,12 +625,12 @@ EXTERN_C DLLEXPORT auto STDCALL CalcAllTablesN(
  * @param presp Pointer to par results
  * @return 1 on success, error code otherwise
  */
-EXTERN_C DLLEXPORT auto STDCALL CalcAllTablesPBN(
+EXTERN_C DLLEXPORT int STDCALL CalcAllTablesPBN(
   struct DdTableDealsPBN const * dealsp,
   int mode,
   int const trumpFilter[DDS_STRAINS],
   struct DdTablesRes * resp,
-  struct AllParResults * presp) -> int;
+  struct AllParResults * presp);
 
 /**
  * @brief CalcAllTablesPBN with an explicit worker-thread cap.
@@ -638,13 +638,13 @@ EXTERN_C DLLEXPORT auto STDCALL CalcAllTablesPBN(
  * @param maxThreads Maximum worker threads; <= 0 selects the automatic
  *        (hardware_concurrency) default.
  */
-EXTERN_C DLLEXPORT auto STDCALL CalcAllTablesPBNN(
+EXTERN_C DLLEXPORT int STDCALL CalcAllTablesPBNN(
   struct DdTableDealsPBN const * dealsp,
   int mode,
   int const trumpFilter[DDS_STRAINS],
   struct DdTablesRes * resp,
   struct AllParResults * presp,
-  int maxThreads) -> int;
+  int maxThreads);
 
 /**
  * @brief Unbounded CalcAllTables: any number of deals, one parallel board job.
@@ -662,26 +662,26 @@ EXTERN_C DLLEXPORT auto STDCALL CalcAllTablesPBNN(
  * @param par Optional par output (numDeals); required when mode requests par
  * @param maxThreads Worker cap; <= 0 means auto
  */
-EXTERN_C DLLEXPORT auto STDCALL CalcAllTablesX(
+EXTERN_C DLLEXPORT int STDCALL CalcAllTablesX(
   int numDeals,
   struct DdTableDeal const * deals,
   int mode,
   int const trumpFilter[DDS_STRAINS],
   struct DdTableResults * results,
   struct ParResults * par,
-  int maxThreads) -> int;
+  int maxThreads);
 
 /**
  * @brief PBN variant of CalcAllTablesX.
  */
-EXTERN_C DLLEXPORT auto STDCALL CalcAllTablesPBNX(
+EXTERN_C DLLEXPORT int STDCALL CalcAllTablesPBNX(
   int numDeals,
   struct DdTableDealPBN const * deals,
   int mode,
   int const trumpFilter[DDS_STRAINS],
   struct DdTableResults * results,
   struct ParResults * par,
-  int maxThreads) -> int;
+  int maxThreads);
 
 /**
  * @brief Solve multiple bridge deals in PBN format.
@@ -690,9 +690,9 @@ EXTERN_C DLLEXPORT auto STDCALL CalcAllTablesPBNX(
  * @param solvedp Pointer to results for solved Boards
  * @return 1 on success, error code otherwise
  */
-EXTERN_C DLLEXPORT auto STDCALL SolveAllBoards(
+EXTERN_C DLLEXPORT int STDCALL SolveAllBoards(
   struct BoardsPBN const * bop,
-  struct SolvedBoards * solvedp) -> int;
+  struct SolvedBoards * solvedp);
 
 /**
  * @brief SolveAllBoards with an explicit worker-thread cap.
@@ -700,14 +700,14 @@ EXTERN_C DLLEXPORT auto STDCALL SolveAllBoards(
  * @param maxThreads Maximum worker threads; <= 0 selects the automatic
  *        (hardware_concurrency) default.
  */
-EXTERN_C DLLEXPORT auto STDCALL SolveAllBoardsN(
+EXTERN_C DLLEXPORT int STDCALL SolveAllBoardsN(
   struct BoardsPBN const * bop,
   struct SolvedBoards * solvedp,
-  int maxThreads) -> int;
+  int maxThreads);
 
-EXTERN_C DLLEXPORT auto STDCALL SolveAllBoardsBin(
+EXTERN_C DLLEXPORT int STDCALL SolveAllBoardsBin(
   struct Boards const * bop,
-  struct SolvedBoards * solvedp) -> int;
+  struct SolvedBoards * solvedp);
 
 /**
  * @brief SolveAllBoardsBin with an explicit worker-thread cap.
@@ -715,108 +715,108 @@ EXTERN_C DLLEXPORT auto STDCALL SolveAllBoardsBin(
  * @param maxThreads Maximum worker threads; <= 0 selects the automatic
  *        (hardware_concurrency) default.
  */
-EXTERN_C DLLEXPORT auto STDCALL SolveAllBoardsBinN(
+EXTERN_C DLLEXPORT int STDCALL SolveAllBoardsBinN(
   struct Boards const * bop,
   struct SolvedBoards * solvedp,
-  int maxThreads) -> int;
+  int maxThreads);
 
-EXTERN_C DLLEXPORT auto STDCALL SolveAllBoardsSeq(
+EXTERN_C DLLEXPORT int STDCALL SolveAllBoardsSeq(
   struct BoardsPBN const * bop,
-  struct SolvedBoards * solvedp) -> int;
+  struct SolvedBoards * solvedp);
 
-EXTERN_C DLLEXPORT auto STDCALL SolveAllBoardsBinSeq(
+EXTERN_C DLLEXPORT int STDCALL SolveAllBoardsBinSeq(
   struct Boards const * bop,
-  struct SolvedBoards * solvedp) -> int;
+  struct SolvedBoards * solvedp);
 
-EXTERN_C DLLEXPORT auto STDCALL SolveAllChunks(
+EXTERN_C DLLEXPORT int STDCALL SolveAllChunks(
   struct BoardsPBN const * bop,
   struct SolvedBoards * solvedp,
-  int chunkSize) -> int;
+  int chunkSize);
 
-EXTERN_C DLLEXPORT auto STDCALL SolveAllChunksBin(
+EXTERN_C DLLEXPORT int STDCALL SolveAllChunksBin(
   struct Boards const * bop,
   struct SolvedBoards * solvedp,
-  int chunkSize) -> int;
+  int chunkSize);
 
-EXTERN_C DLLEXPORT auto STDCALL SolveAllChunksPBN(
+EXTERN_C DLLEXPORT int STDCALL SolveAllChunksPBN(
   struct BoardsPBN const * bop,
   struct SolvedBoards * solvedp,
-  int chunkSize) -> int;
+  int chunkSize);
 
-EXTERN_C DLLEXPORT auto STDCALL Par(
+EXTERN_C DLLEXPORT int STDCALL Par(
   struct DdTableResults const * tablep,
   struct ParResults * presp,
-  int vulnerable) -> int;
+  int vulnerable);
 
-EXTERN_C DLLEXPORT auto STDCALL CalcPar(
+EXTERN_C DLLEXPORT int STDCALL CalcPar(
   struct DdTableDeal tableDeal,
   int vulnerable,
   struct DdTableResults * tablep,
-  struct ParResults * presp) -> int;
+  struct ParResults * presp);
 
-EXTERN_C DLLEXPORT auto STDCALL CalcParPBN(
+EXTERN_C DLLEXPORT int STDCALL CalcParPBN(
   struct DdTableDealPBN tableDealPBN,
   struct DdTableResults * tablep,
   int vulnerable,
-  struct ParResults * presp) -> int;
+  struct ParResults * presp);
 
-EXTERN_C DLLEXPORT auto STDCALL SidesPar(
+EXTERN_C DLLEXPORT int STDCALL SidesPar(
   struct DdTableResults const * tablep,
   struct ParResultsDealer sidesRes[2],
-  int vulnerable) -> int;
+  int vulnerable);
 
-EXTERN_C DLLEXPORT auto STDCALL DealerPar(
+EXTERN_C DLLEXPORT int STDCALL DealerPar(
   struct DdTableResults const * tablep,
   struct ParResultsDealer * presp,
   int dealer,
-  int vulnerable) -> int;
+  int vulnerable);
 
-EXTERN_C DLLEXPORT auto STDCALL DealerParBin(
+EXTERN_C DLLEXPORT int STDCALL DealerParBin(
   struct DdTableResults const * tablep,
   struct ParResultsMaster * presp,
-  int dealer, 
-  int vulnerable) -> int;
+  int dealer,
+  int vulnerable);
 
-EXTERN_C DLLEXPORT auto STDCALL SidesParBin(
+EXTERN_C DLLEXPORT int STDCALL SidesParBin(
   struct DdTableResults const * tablep,
   struct ParResultsMaster sidesRes[2],
-  int vulnerable) -> int;
+  int vulnerable);
 
-EXTERN_C DLLEXPORT auto STDCALL ConvertToDealerTextFormat(
+EXTERN_C DLLEXPORT int STDCALL ConvertToDealerTextFormat(
   struct ParResultsMaster const * pres,
-  char * resp) -> int;
+  char * resp);
 
-EXTERN_C DLLEXPORT auto STDCALL ConvertToSidesTextFormat(
+EXTERN_C DLLEXPORT int STDCALL ConvertToSidesTextFormat(
   struct ParResultsMaster const * pres,
-  struct ParTextResults * resp) -> int;
+  struct ParTextResults * resp);
 
-EXTERN_C DLLEXPORT auto STDCALL AnalysePlayBin(
+EXTERN_C DLLEXPORT int STDCALL AnalysePlayBin(
   struct Deal dl,
   struct PlayTraceBin play,
   struct SolvedPlay * solved,
-  int thrId) -> int;
+  int thrId);
 
-EXTERN_C DLLEXPORT auto STDCALL AnalysePlayPBN(
+EXTERN_C DLLEXPORT int STDCALL AnalysePlayPBN(
   struct DealPBN dlPBN,
   struct PlayTracePBN playPBN,
   struct SolvedPlay * solvedp,
-  int thrId) -> int;
+  int thrId);
 
-EXTERN_C DLLEXPORT auto STDCALL AnalyseAllPlaysBin(
+EXTERN_C DLLEXPORT int STDCALL AnalyseAllPlaysBin(
   struct Boards const * bop,
   struct PlayTracesBin const * plp,
   struct SolvedPlays * solvedp,
-  int chunkSize) -> int;
+  int chunkSize);
 
-EXTERN_C DLLEXPORT auto STDCALL AnalyseAllPlaysPBN(
+EXTERN_C DLLEXPORT int STDCALL AnalyseAllPlaysPBN(
   struct BoardsPBN const * bopPBN,
   struct PlayTracesPBN const * plpPBN,
   struct SolvedPlays * solvedp,
-  int chunkSize) -> int;
+  int chunkSize);
 
-EXTERN_C DLLEXPORT auto STDCALL GetDDSInfo(
-  struct DDSInfo * info) -> void;
+EXTERN_C DLLEXPORT void STDCALL GetDDSInfo(
+  struct DDSInfo * info);
 
-EXTERN_C DLLEXPORT auto STDCALL ErrorMessage(
+EXTERN_C DLLEXPORT void STDCALL ErrorMessage(
   int code,
-  char line[80]) -> void;
+  char line[80]);
