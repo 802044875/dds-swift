@@ -38,14 +38,12 @@ let package = Package(
         .target(
             name: "DDSSwift",
             dependencies: ["DDS"],
-            path: "Sources/DDSSwift",
-            swiftSettings: [.interoperabilityMode(.Cxx)]
+            path: "Sources/DDSSwift"
         ),
         .testTarget(
             name: "DDSSwiftTests",
             dependencies: ["DDSSwift"],
-            path: "Tests/DDSSwiftTests",
-            swiftSettings: [.interoperabilityMode(.Cxx)]
+            path: "Tests/DDSSwiftTests"
         )
     ],
     cxxLanguageStandard: .cxx20
