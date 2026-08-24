@@ -1,8 +1,10 @@
 // DDS 3.1.0 — C++20 double dummy solver.
 // publicHeadersPath is library/src, so <utility/constants.h> resolves correctly
 // when DDSSwift imports this module via Swift/C++ interop.
+// Note: `requires cplusplus` omitted intentionally — Clang's dependency scanner
+// runs before compilation without C++ mode enabled and rejects the module; the
+// headers compile correctly as C++ via .interoperabilityMode(.Cxx) at build time.
 module DDS {
     header "api/dll.h"
-    requires cplusplus
     export *
 }
